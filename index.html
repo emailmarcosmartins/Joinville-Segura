@@ -1,0 +1,518 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joinville Segura</title>
+    <!-- Tailwind CSS para o visual moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e3a8a',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .elderly-text { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; }
+        input, select, textarea { font-size: 1.25rem !important; font-weight: 600 !important; }
+        button { transition: all 0.2s; }
+        button:active { transform: scale(0.95); }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0"
+  }
+}
+</script>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200 min-h-screen">
+
+    <div id="root" class="max-w-4xl mx-auto p-4 md:p-8">
+        <!-- O conteúdo será injetado aqui via JavaScript -->
+    </div>
+
+    <script>
+        // --- CONFIGURAÇÕES E CONSTANTES ---
+        const DIRECT_URL = 'https://script.google.com/macros/s/AKfycbzn2NSn77z4nsNOyDSyfT5_YKBLimBdN4X1oVa0MSxJbpqIjFrCuJ4rwhpiRSyBrE1l/exec';
+        const ADMIN_PASSWORD = '30012026';
+        const PROFANITY_LIST = ['palavrao1', 'palavrao2', 'merda', 'porra', 'caralho', 'foda', 'puta', 'vagabundo', 'idiota'];
+
+        // --- ESTADO GLOBAL DO APLICATIVO ---
+        let state = {
+            screen: 'home',
+            darkMode: false,
+            currentTime: new Date(),
+            registrations: [],
+            consegs: [],
+            loading: false,
+            // Dados da sessão de ouvidoria
+            ouvidoriaUser: '',
+            ouvidoriaPass: '',
+            ouvidoriaEditingId: null,
+            ouvidoriaView: 'login' // 'login', 'list', 'form'
+        };
+
+        // --- UTILITÁRIOS ---
+        const maskName = (val) => val.toUpperCase().substring(0, 15);
+        const hasProfanity = (text) => PROFANITY_LIST.some(p => text.toLowerCase().includes(p));
+        
+        const maskUserPassword = (val) => {
+            const cleaned = val.replace(/[^A-Za-z0-9]/g, '');
+            const letters = cleaned.slice(0, 3).replace(/[^A-Za-z]/g, '').toUpperCase();
+            const digits = cleaned.slice(3, 9).replace(/[^0-9]/g, '');
+            let res = letters;
+            if (letters.length >= 3) res = letters.slice(0, 3) + '-' + digits.slice(0, 6);
+            return res.substring(0, 10);
+        };
+
+        const maskProcessNumber = (val) => {
+            const digits = val.replace(/[^0-9]/g, '').slice(0, 10);
+            let res = '';
+            if (digits.length > 0) res += digits.slice(0, 2);
+            if (digits.length > 2) res += '.' + digits.slice(2, 3);
+            if (digits.length > 3) res += '.' + digits.slice(3, 9);
+            if (digits.length > 9) res += '-' + digits.slice(9, 10);
+            return res;
+        };
+
+        const getOS = () => {
+            const ua = navigator.userAgent;
+            if (/android/i.test(ua)) return 'Android';
+            if (/iPad|iPhone|iPod/.test(ua)) return 'iOS';
+            return 'Web';
+        };
+
+        // --- COMUNICAÇÃO COM GOOGLE SHEETS ---
+        async function loadCloudData() {
+            state.loading = true;
+            render();
+            try {
+                const [cRes, rRes] = await Promise.all([
+                    fetch(`${DIRECT_URL}?type=getConsegs`),
+                    fetch(`${DIRECT_URL}?type=getRegistrations`)
+                ]);
+                state.consegs = await cRes.json();
+                state.registrations = await rRes.json();
+            } catch (e) {
+                console.error("Erro ao carregar dados:", e);
+            } finally {
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function postToCloud(type, payload) {
+            console.log("ENVIANDO AGORA...", type);
+            try {
+                await fetch(DIRECT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ type, payload })
+                });
+                alert("Sinal enviado para a nuvem!");
+                loadCloudData();
+                return true;
+            } catch (e) {
+                alert("Erro de conexão.");
+                return false;
+            }
+        }
+
+        // --- SISTEMA DE RENDERIZAÇÃO ---
+        function setScreen(scr) {
+            state.screen = scr;
+            render();
+        }
+
+        function toggleDarkMode() {
+            state.darkMode = !state.darkMode;
+            document.documentElement.classList.toggle('dark', state.darkMode);
+            render();
+        }
+
+        function render() {
+            const root = document.getElementById('root');
+            const dateStr = state.currentTime.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const timeStr = state.currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const formattedDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
+            let content = `
+                <header class="text-center mb-8">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="w-10"></div>
+                        <h1 class="text-3xl md:text-5xl font-extrabold text-primary dark:text-blue-400">Joinville Segura</h1>
+                        <button onclick="toggleDarkMode()" class="p-3 rounded-full bg-gray-200 dark:bg-gray-700">
+                            ${state.darkMode ? '☀️' : '🌙'}
+                        </button>
+                    </div>
+                    <p class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-300">Sistema Comunitário de Segurança Pública</p>
+                    <p class="text-lg font-bold text-gray-500 mt-2">${formattedDate} ${timeStr}</p>
+                </header>
+                
+                ${state.loading ? '<div class="text-center p-4 animate-pulse font-bold text-blue-600">Sincronizando com a nuvem...</div>' : ''}
+                
+                <main id="app-main">
+                    ${renderScreen()}
+                </main>
+
+                ${state.screen === 'home' ? renderFooter() : ''}
+            `;
+
+            root.innerHTML = content;
+        }
+
+        function renderScreen() {
+            switch(state.screen) {
+                case 'home': return renderHome();
+                case 'ouvidoria': return renderOuvidoria();
+                case 'emergencia': return renderEmergencia();
+                case 'servicos': return renderServicos();
+                case 'agenda': return renderAgenda();
+                case 'admin': return renderAdmin();
+                case 'president': return renderPresident();
+                default: return renderHome();
+            }
+        }
+
+        function renderHome() {
+            const buttons = [
+                { label: "Abrir OUVIDORIA (Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "window.open('https://oauthexternal.joinville.sc.gov.br/')" },
+                { label: "Registrar no CONSEG a OUVIDORIA", color: "bg-indigo-600", icon: "📝", click: "setScreen('ouvidoria')" },
+                { label: "PMSC Cidadão (Polícia Militar)", color: "bg-emerald-600", icon: "👮", click: "handlePMSCCidadao()" },
+                { label: "Boletim de Ocorrência (Polícia Civil)", color: "bg-red-600", icon: "📑", click: "window.open('https://delegaciavirtual.sc.gov.br/')" },
+                { label: "SINESP Cidadão (Veículos)", color: "bg-yellow-600", icon: "🚗", click: "handleSinesp()" },
+                { label: "CELESC (Energia Elétrica)", color: "bg-orange-600", icon: "⚡", click: "handleCelesc()" },
+                { label: "Telefones de EMERGÊNCIA", color: "bg-rose-600", icon: "🚨", click: "setScreen('emergencia')" },
+                { label: "Telefones de SERVIÇOS", color: "bg-teal-600", icon: "🛠️", click: "setScreen('servicos')" },
+                { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
+                { label: "Inteligência Artificial ChatGPT", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" }
+            ];
+
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${buttons.map(b => `
+                        <button onclick="${b.click}" class="${b.color} text-white p-6 rounded-2xl shadow-xl flex items-center gap-4 text-left elderly-text min-h-[110px]">
+                            <span class="text-4xl bg-white/20 p-2 rounded-xl">${b.icon}</span>
+                            <span>${b.label}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderFooter() {
+            return `
+                <div class="mt-12 bg-gray-100 dark:bg-gray-800 p-6 rounded-3xl border-2 border-dashed border-gray-400">
+                    <h3 class="text-2xl font-bold mb-6 flex items-center gap-2 text-primary dark:text-blue-400">🛡️ Área Administrativa</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <button onclick="setScreen('president')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Acessar como Presidente</button>
+                        <button onclick="setScreen('admin')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Acessar Painel Admin</button>
+                        <button onclick="window.close()" class="bg-black text-white p-4 rounded-xl font-bold">Sair do Aplicativo</button>
+                    </div>
+                </div>
+                <footer class="mt-8 pt-8 border-t text-center space-y-6">
+                    <p class="text-lg font-bold text-gray-600 dark:text-gray-400">Este aplicativo "Joinville Segura" foi idealizado por Marcos Roberto Martins - Membro do Conselho Comunitário de Segurança CONSEG Comasa e Espinheiros desde 2017.</p>
+                    <div class="flex flex-col gap-4">
+                        <a href="https://cepcc.ssp.sc.gov.br" target="_blank" class="text-blue-700 dark:text-blue-400 font-extrabold text-xl underline">Saiba mais sobre os CONSEGs em cepcc.ssp.sc.gov.br</a>
+                        <a href="mailto:ConsegComasaEspinheiros@Gmail.com" class="text-blue-700 dark:text-blue-400 font-extrabold text-xl underline">Reportar um problema com este aplicativo</a>
+                    </div>
+                </footer>
+            `;
+        }
+
+        function renderOuvidoria() {
+            if (state.ouvidoriaView === 'login') {
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6">
+                        <h2 class="text-3xl font-bold text-center">Registrar Processo da Ouvidoria</h2>
+                        <div class="space-y-4">
+                            <label class="block font-bold">Seu primeiro nome</label>
+                            <input type="text" id="ov-name" value="${state.ouvidoriaUser}" oninput="state.ouvidoriaUser = maskName(this.value); this.value = state.ouvidoriaUser" placeholder="MARCOS" class="w-full p-4 border rounded-xl dark:bg-gray-700">
+                            <label class="block font-bold">Sua senha (AAA-999999)</label>
+                            <input type="text" id="ov-pass" value="${state.ouvidoriaPass}" oninput="state.ouvidoriaPass = maskUserPassword(this.value); this.value = state.ouvidoriaPass" placeholder="ABC-123456" class="w-full p-4 border rounded-xl dark:bg-gray-700">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="handleOuvidoriaLogin('list')" class="bg-blue-600 text-white p-5 rounded-xl font-bold">Buscar Meus Registros</button>
+                            <button onclick="handleOuvidoriaLogin('form')" class="bg-green-600 text-white p-5 rounded-xl font-bold">Registrar minha OUVIDORIA</button>
+                            <button onclick="handleGPS()" class="bg-indigo-600 text-white p-5 rounded-xl font-bold">Minha Localização</button>
+                            <button onclick="setScreen('home')" class="bg-gray-500 text-white p-5 rounded-xl font-bold">Voltar</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (state.ouvidoriaView === 'list') {
+                const regs = state.registrations.filter(r => r.userName === state.ouvidoriaUser && r.userPassword === state.ouvidoriaPass);
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6">
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-3xl font-bold">Meus Registros</h2>
+                            <button onclick="state.ouvidoriaView = 'login'; render();" class="text-primary font-bold">Trocar Usuário</button>
+                        </div>
+                        <div class="space-y-4 max-h-[400px] overflow-y-auto">
+                            ${regs.length === 0 ? '<p class="text-center py-8">Nenhum registro encontrado.</p>' : regs.map(r => `
+                                <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border-l-8 border-primary flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold text-xl">${r.subject}</p>
+                                        <p class="text-sm">Status: ${r.status} | Data: ${new Date(r.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="editReg('${r.id}')" class="p-2 bg-amber-500 text-white rounded-lg">✏️</button>
+                                        <button onclick="deleteReg('${r.id}')" class="p-2 bg-red-500 text-white rounded-lg">🗑️</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="flex gap-4">
+                            <button onclick="state.ouvidoriaView = 'form'; render();" class="flex-1 bg-green-600 text-white p-5 rounded-xl font-bold">+ Novo Registro</button>
+                            <button onclick="state.ouvidoriaView = 'login'; render();" class="flex-1 bg-gray-500 text-white p-5 rounded-xl font-bold">Voltar</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (state.ouvidoriaView === 'form') {
+                const editObj = state.registrations.find(r => r.id === state.ouvidoriaEditingId) || {};
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6">
+                        <h2 class="text-3xl font-bold">${state.ouvidoriaEditingId ? 'Editar Registro' : 'Novo Registro'}</h2>
+                        <div class="space-y-4">
+                            <label class="block font-bold">Selecione o CONSEG *</label>
+                            <select id="form-conseg" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold">
+                                <option value="">-- Escolha um CONSEG --</option>
+                                ${state.consegs.filter(c => c.ativo).map(c => `<option value="${c.id}" ${editObj.consegId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                            </select>
+                            <label class="block font-bold">Assunto *</label>
+                            <textarea id="form-subject" class="w-full p-4 border rounded-xl dark:bg-gray-700 min-h-[150px]">${editObj.subject || ''}</textarea>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button onclick="handlePaste()" class="p-3 bg-gray-200 dark:bg-gray-600 rounded-lg font-bold">📋 Colar</button>
+                                <button onclick="document.getElementById('form-subject').value = ''" class="p-3 bg-gray-200 dark:bg-gray-600 rounded-lg font-bold">🧹 Limpar</button>
+                            </div>
+                            <label class="block font-bold">Nº do Processo (Opcional)</label>
+                            <input type="text" id="form-proc" oninput="this.value = maskProcessNumber(this.value)" value="${editObj.processNumber || ''}" placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl dark:bg-gray-700">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <button onclick="saveOuvidoria()" class="bg-green-600 text-white p-5 rounded-xl font-bold text-xl">💾 Salvar</button>
+                            <button onclick="state.ouvidoriaView = 'list'; state.ouvidoriaEditingId = null; render();" class="bg-gray-500 text-white p-5 rounded-xl font-bold text-xl">❌ Cancelar</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderEmergencia() {
+            const list = [
+                ["Polícia Militar", "190"], ["SAMU", "192"], ["Bombeiros", "193"], ["Guarda Municipal", "153"], ["Polícia Civil", "181"],
+                ["Águas de Joinville", "115"], ["CELESC", "0800480196"], ["Denúncia Criança/Idoso", "100"], ["Violência Mulher", "180"], ["Prevenção Suicídio (CVV)", "188"]
+            ];
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
+                    <h2 class="text-3xl font-bold text-red-600 mb-6">🚨 Telefones de EMERGÊNCIA</h2>
+                    ${list.map(l => `<button onclick="window.open('tel:${l[1]}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-red-500"><span>${l[0]} (${l[1]})</span> 📞</button>`).join('')}
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderServicos() {
+            const list = [
+                ["Recolhimento Móveis/Animais", "34410400"], ["Disk Coleta (Lixo Eletrônico)", "30277115"], ["Prefeitura Joinville", "34313233"]
+            ];
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
+                    <h2 class="text-3xl font-bold text-teal-600 mb-6">🛠️ Telefones de SERVIÇOS</h2>
+                    ${list.map(l => `<button onclick="window.open('tel:${l[1]}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-teal-500"><span>${l[0]}</span> 📞</button>`).join('')}
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderAgenda() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
+                    <h2 class="text-3xl font-bold text-purple-600 mb-6">📅 Agenda do CONSEG</h2>
+                    <select onchange="updateAgendaView(this.value)" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold">
+                        <option value="">-- Selecione o CONSEG --</option>
+                        ${state.consegs.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+                    </select>
+                    <div id="agenda-display" class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl min-h-[100px] text-xl font-bold">
+                        Selecione um CONSEG para ver a agenda.
+                    </div>
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderAdmin() {
+            // Implementação resumida do painel admin
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
+                    <h2 class="text-3xl font-bold">Painel Administrativo</h2>
+                    <div id="admin-login-area">
+                        <input type="password" id="admin-pass" placeholder="Senha Administrativa" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
+                        <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold">Entrar</button>
+                    </div>
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderPresident() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
+                    <h2 class="text-3xl font-bold">Acesso Presidente</h2>
+                    <select id="pres-conseg" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold mb-4">
+                        <option value="">-- Escolha seu CONSEG --</option>
+                        ${state.consegs.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
+                    </select>
+                    <input type="password" id="pres-pass" placeholder="Senha do CONSEG" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
+                    <button onclick="handlePresidentLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold">Entrar</button>
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
+                </div>
+            `;
+        }
+
+        // --- FUNÇÕES DE AÇÃO ---
+
+        function handleOuvidoriaLogin(nextView) {
+            if (!state.ouvidoriaUser || !/^[A-Z]{3}-[0-9]{6}$/.test(state.ouvidoriaPass)) {
+                alert("Preencha nome e senha (formato AAA-999999) corretamente!");
+                return;
+            }
+            state.ouvidoriaView = nextView;
+            render();
+        }
+
+        async function saveOuvidoria() {
+            const consegId = document.getElementById('form-conseg').value;
+            const subject = document.getElementById('form-subject').value;
+            const proc = document.getElementById('form-proc').value;
+
+            if (!consegId || !subject) { alert("Preencha os campos obrigatórios!"); return; }
+            if (hasProfanity(subject)) { alert("O assunto contém palavras proibidas!"); return; }
+
+            let lat = 0, lon = 0;
+            try {
+                const p = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout: 3000}));
+                lat = p.coords.latitude; lon = p.coords.longitude;
+            } catch(e) {}
+
+            const reg = {
+                id: state.ouvidoriaEditingId || Date.now().toString(),
+                userName: state.ouvidoriaUser,
+                userPassword: state.ouvidoriaPass,
+                consegId,
+                subject,
+                processNumber: proc,
+                status: state.ouvidoriaEditingId ? 'Em Andamento' : 'Aberto',
+                createdAt: new Date().toISOString(),
+                latitude: lat,
+                longitude: lon
+            };
+
+            const success = await postToCloud('registration', reg);
+            if (success) {
+                state.ouvidoriaView = 'list';
+                state.ouvidoriaEditingId = null;
+                render();
+            }
+        }
+
+        async function deleteReg(id) {
+            if (confirm("Excluir este registro?")) {
+                await postToCloud('delete_registration', { id });
+            }
+        }
+
+        function editReg(id) {
+            state.ouvidoriaEditingId = id;
+            state.ouvidoriaView = 'form';
+            render();
+        }
+
+        function handleGPS() {
+            navigator.geolocation.getCurrentPosition(pos => {
+                window.open(`https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`);
+            }, () => alert("Erro ao obter GPS."));
+        }
+
+        async function handlePaste() {
+            const t = await navigator.clipboard.readText();
+            document.getElementById('form-subject').value += t;
+        }
+
+        function updateAgendaView(id) {
+            const c = state.consegs.find(con => con.id === id);
+            const box = document.getElementById('agenda-display');
+            if (c) {
+                box.innerHTML = `
+                    <p class="mb-4">${c.agenda || "Sem agenda cadastrada."}</p>
+                    <button onclick="window.location.href='mailto:${c.email || 'consegcomasaespinheiros@gmail.com'}?subject=Para o presidente do ${c.nome}'" class="w-full p-4 bg-purple-600 text-white rounded-xl">📧 Enviar E-mail</button>
+                `;
+            } else {
+                box.innerHTML = "Selecione um CONSEG para ver a agenda.";
+            }
+        }
+
+        function handleAdminLogin() {
+            const p = document.getElementById('admin-pass').value;
+            if (p === ADMIN_PASSWORD) {
+                alert("Acesso Administrativo Liberado via Planilha!");
+                window.open('https://docs.google.com/spreadsheets/d/1XyO3Kx7U0M0Yp3m7rS_2S0oY-P7N9F_Xk8mX8X8X8X8/edit', '_blank');
+            } else alert("Senha Admin Incorreta!");
+        }
+
+        function handlePresidentLogin() {
+            const id = document.getElementById('pres-conseg').value;
+            const p = document.getElementById('pres-pass').value;
+            const c = state.consegs.find(con => con.id === id);
+            if (c && c.senha === p) {
+                alert(`Bem vindo, Presidente do ${c.nome}!`);
+                // No app real, aqui abriria as ferramentas de edição de agenda
+            } else alert("Senha ou CONSEG incorretos!");
+        }
+
+        function handlePMSCCidadao() {
+            const os = getOS();
+            if (os === 'Android') window.location.href = "https://play.google.com/store/apps/details?id=br.gov.sc.pm.pmsccidadao";
+            else if (os === 'iOS') window.location.href = "https://apps.apple.com/br/app/pmsc-cidad%C3%A3o/id1481519067";
+            else window.open("https://www.pm.sc.gov.br/");
+        }
+
+        function handleSinesp() {
+            if (getOS() === 'iOS') window.open("https://apps.apple.com/br/app/sinesp-cidad%C3%A3o/id768157962");
+            else window.open("https://play.google.com/store/apps/details?id=br.gov.sinesp.cidadao.android");
+        }
+
+        function handleCelesc() {
+            if (getOS() === 'iOS') window.open("https://apps.apple.com/br/app/celesc/id6463017641");
+            else window.open("https://play.google.com/store/apps/details?id=br.com.celesc.app");
+        }
+
+        // --- INICIALIZAÇÃO ---
+        setInterval(() => {
+            state.currentTime = new Date();
+            render();
+        }, 1000 * 60); // Atualiza o relógio a cada minuto
+
+        // Carga inicial
+        loadCloudData();
+        render();
+
+    </script>
+</body>
+</html>
