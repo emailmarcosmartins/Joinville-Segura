@@ -60,6 +60,7 @@
             loading: false,
             // Admin Panel State
             adminLogged: false,
+            isAdminAuthenticated: false,
             loadingAdmin: false,
             adminTab: 'registros', // 'registros' | 'consegs'
             // Dados da sessão de ouvidoria
@@ -362,7 +363,7 @@
         }
 
         function renderAdmin() {
-            if (!state.adminLogged) {
+            if (!state.isAdminAuthenticated) {
                 return `
                     <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto">
                         <h2 class="text-3xl font-bold text-center">Painel Administrativo</h2>
@@ -383,7 +384,7 @@
                 <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-3xl font-bold">Painel Administrativo</h2>
-                        <button onclick="state.adminLogged = false; render();" class="text-red-500 font-bold">Sair</button>
+                        <button onclick="state.isAdminAuthenticated = false; render();" class="text-red-500 font-bold">Sair</button>
                     </div>
                     
                     <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
@@ -476,31 +477,31 @@
             render();
 
             try {
-                // Fetch regular para poder ler a resposta JSON
+                // Fetch POST para verificar a senha remotamente no Google Apps Script
                 const response = await fetch(DIRECT_URL, {
                     method: 'POST',
                     body: JSON.stringify({ type: 'login_admin', payload: { senha: senhaDigitada } })
                 });
                 
-                // Em Web Apps do Google, POST pode retornar 302, mas fetch lida com isso se CORS estiver OK.
-                // No entanto, muitas vezes o Web App retorna HTML ou é opaco no POST. 
-                // Se o script retornar JSON corretamente:
+                // Em Web Apps do Google, POST pode retornar um objeto JSON se o script for configurado com ContentService
                 const result = await response.json();
                 
                 if (result.status === 'sucesso') {
-                    alert("Acesso Administrativo Liberado!");
-                    state.adminLogged = true;
+                    console.log("Login autorizado, carregando painel...");
+                    state.isAdminAuthenticated = true;
+                    state.loadingAdmin = false;
+                    render(); // Renderização imediata para mostrar o painel logado
                 } else {
+                    console.warn("Login negado pelo servidor.");
+                    state.loadingAdmin = false;
                     alert("Senha Incorreta.");
+                    render();
                 }
             } catch (e) {
-                // Fallback para quando o servidor retorna 200 via no-cors ou similar, mas o JSON falha.
-                // Como não podemos ler o corpo da resposta em no-cors, essa abordagem segura via servidor
-                // requer que o Google Apps Script tenha o Content-Service configurado com CORS headers.
                 console.error("Erro na verificação remota:", e);
-                alert("Falha na comunicação com o servidor ou senha incorreta.");
-            } finally {
+                // Fallback amigável se o servidor não retornar JSON (comum em no-cors ou configurações erradas de CORS)
                 state.loadingAdmin = false;
+                alert("Falha na comunicação com o servidor ou senha incorreta.");
                 render();
             }
         }
