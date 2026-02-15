@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -26,6 +25,7 @@
         input, select, textarea { font-size: 1.25rem !important; font-weight: 600 !important; }
         button { transition: all 0.2s; }
         button:active { transform: scale(0.95); }
+        .scroll-hidden::-webkit-scrollbar { display: none; }
     </style>
 <script type="importmap">
 {
@@ -46,8 +46,26 @@
     </div>
 
     <script>
+        // --- TÉCNICA JSONP GLOBAL ---
+        window.lastData = null;
+        window.handleGoogleData = function(data) {
+            console.log('GOOGLE_DATA:', data);
+            
+            let parsedData = data;
+            // Se data for uma string, transforme em objeto
+            if (typeof data === 'string') {
+                try {
+                    parsedData = JSON.parse(data);
+                } catch (e) {
+                    console.error("Erro ao processar JSON da string recebida:", e);
+                }
+            }
+            window.lastData = parsedData;
+        };
+
         // --- CONFIGURAÇÕES E CONSTANTES ---
         const DIRECT_URL = 'https://script.google.com/macros/s/AKfycbzn2NSn77z4nsNOyDSyfT5_YKBLimBdN4X1oVa0MSxJbpqIjFrCuJ4rwhpiRSyBrE1l/exec';
+        const ADMIN_PASSWORD_LOCAL = '30012026';
         const PROFANITY_LIST = ['palavrao1', 'palavrao2', 'merda', 'porra', 'caralho', 'foda', 'puta', 'vagabundo', 'idiota'];
 
         // --- ESTADO GLOBAL DO APLICATIVO ---
@@ -58,22 +76,21 @@
             registrations: [],
             consegs: [],
             loading: false,
-            // Admin Panel State
-            adminLogged: false,
             isAdminAuthenticated: false,
-            loadingAdmin: false,
-            adminTab: 'registros', // 'registros' | 'consegs'
-            // Dados da sessão de ouvidoria
+            adminTab: 'registros',
+            adminEditingConseg: null,
+            filterPeriodStart: '',
+            filterPeriodEnd: '',
+            filterStatus: '',
+            filterConseg: '',
             ouvidoriaUser: '',
             ouvidoriaPass: '',
             ouvidoriaEditingId: null,
-            ouvidoriaView: 'login' // 'login', 'list', 'form'
+            ouvidoriaView: 'login' 
         };
 
         // --- UTILITÁRIOS ---
         const maskName = (val) => val.toUpperCase().substring(0, 15);
-        const hasProfanity = (text) => PROFANITY_LIST.some(p => text.toLowerCase().includes(p));
-        
         const maskUserPassword = (val) => {
             const cleaned = val.replace(/[^A-Za-z0-9]/g, '');
             const letters = cleaned.slice(0, 3).replace(/[^A-Za-z]/g, '').toUpperCase();
@@ -82,7 +99,6 @@
             if (letters.length >= 3) res = letters.slice(0, 3) + '-' + digits.slice(0, 6);
             return res.substring(0, 10);
         };
-
         const maskProcessNumber = (val) => {
             const digits = val.replace(/[^0-9]/g, '').slice(0, 10);
             let res = '';
@@ -92,7 +108,6 @@
             if (digits.length > 9) res += '-' + digits.slice(9, 10);
             return res;
         };
-
         const getOS = () => {
             const ua = navigator.userAgent;
             if (/android/i.test(ua)) return 'Android';
@@ -100,46 +115,86 @@
             return 'Web';
         };
 
-        // --- COMUNICAÇÃO COM GOOGLE SHEETS ---
-        async function loadCloudData() {
+        // --- COMUNICAÇÃO JSONP COM POLLING ---
+        let dataPollingInterval = null;
+
+        function fetchDataJSONP() {
             state.loading = true;
+            window.lastData = null; // Limpa dados anteriores
             render();
-            try {
-                const [cRes, rRes] = await Promise.all([
-                    fetch(`${DIRECT_URL}?type=getConsegs`),
-                    fetch(`${DIRECT_URL}?type=getRegistrations`)
-                ]);
-                state.consegs = await cRes.json();
-                state.registrations = await rRes.json();
-            } catch (e) {
-                console.error("Erro ao carregar dados:", e);
-            } finally {
-                state.loading = false;
-                render();
+
+            // 1. Remove script anterior se existir
+            const oldScript = document.getElementById('google-script-loader');
+            if (oldScript) {
+                oldScript.remove();
             }
+
+            // 2. Cria novo script com cache-busting
+            const script = document.createElement('script');
+            script.id = 'google-script-loader';
+            script.src = `${DIRECT_URL}?callback=handleGoogleData&t=${Date.now()}`;
+            document.body.appendChild(script);
+
+            // 3. Intervalo de Verificação (Polling)
+            const startTime = Date.now();
+            if (dataPollingInterval) clearInterval(dataPollingInterval);
+
+            dataPollingInterval = setInterval(() => {
+                // Checa se os dados chegaram
+                if (window.lastData) {
+                    processIncomingData(window.lastData);
+                    clearInterval(dataPollingInterval);
+                    state.loading = false;
+                    render();
+                }
+
+                // Limpeza por Timeout (Aumentado para 20 segundos conforme solicitado)
+                if (Date.now() - startTime > 20000) {
+                    clearInterval(dataPollingInterval);
+                    state.loading = false;
+                    alert('Erro de conexão com o Google. Verifique sua internet.');
+                    render();
+                }
+            }, 500);
         }
 
-        async function postToCloud(type, payload) {
-            console.log("ENVIANDO AGORA...", type);
-            try {
-                await fetch(DIRECT_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ type, payload })
-                });
-                alert("Sinal enviado para a nuvem!");
-                loadCloudData();
-                return true;
-            } catch (e) {
-                alert("Erro de conexão.");
-                return false;
+        function processIncomingData(data) {
+            console.log("Processando dados recebidos pelo Polling:", data);
+            
+            // Mapeia consegs garantindo que propriedades batam com lowercase
+            if (data && data.consegs) {
+                state.consegs = data.consegs.map(c => ({
+                    id: c.id || '',
+                    nome: c.nome || '',
+                    senha: c.senha || '',
+                    ativo: String(c.ativo).toLowerCase() === 'true',
+                    email: c.email || '',
+                    agenda: c.agenda || ''
+                }));
+            }
+
+            // Mapeia registros
+            if (data && data.registrations) {
+                state.registrations = data.registrations.map(r => ({
+                    id: r.id || '',
+                    userName: r.username || r.userName || '',
+                    userPassword: r.userpassword || r.userPassword || '',
+                    consegId: r.consegid || r.consegId || '',
+                    subject: r.subject || '',
+                    processNumber: r.processnumber || r.processNumber || '',
+                    processDate: r.processdate || r.processDate || '',
+                    status: r.status || 'Aberto',
+                    createdAt: r.createdat || r.createdAt || new Date().toISOString(),
+                    latitude: r.latitude || null,
+                    longitude: r.longitude || null
+                }));
             }
         }
 
         // --- SISTEMA DE RENDERIZAÇÃO ---
         function setScreen(scr) {
             state.screen = scr;
+            state.adminEditingConseg = null;
             render();
         }
 
@@ -167,8 +222,6 @@
                     <p class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-300">Sistema Comunitário de Segurança Pública</p>
                     <p class="text-lg font-bold text-gray-500 mt-2">${formattedDate} ${timeStr}</p>
                 </header>
-                
-                ${state.loading ? '<div class="text-center p-4 animate-pulse font-bold text-blue-600">Sincronizando com a nuvem...</div>' : ''}
                 
                 <main id="app-main">
                     ${renderScreen()}
@@ -224,8 +277,8 @@
                 <div class="mt-12 bg-gray-100 dark:bg-gray-800 p-6 rounded-3xl border-2 border-dashed border-gray-400">
                     <h3 class="text-2xl font-bold mb-6 flex items-center gap-2 text-primary dark:text-blue-400">🛡️ Área Administrativa</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <button onclick="setScreen('president')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Acessar como Presidente</button>
-                        <button onclick="setScreen('admin')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Acessar Painel Admin</button>
+                        <button onclick="setScreen('president')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Presidente de CONSEG</button>
+                        <button onclick="setScreen('admin')" class="bg-slate-700 text-white p-4 rounded-xl font-bold">Painel Admin</button>
                         <button onclick="window.close()" class="bg-black text-white p-4 rounded-xl font-bold">Sair do Aplicativo</button>
                     </div>
                 </div>
@@ -239,11 +292,287 @@
             `;
         }
 
+        function renderAdmin() {
+            if (!state.isAdminAuthenticated) {
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto">
+                        <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Painel Administrativo</h2>
+                        <div id="admin-login-area">
+                            <label class="block font-bold mb-2 text-xl">Senha de Acesso</label>
+                            <input type="password" id="admin-pass" placeholder="Senha do Sistema" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-6 font-bold text-2xl">
+                            <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold text-2xl flex items-center justify-center gap-2 shadow-lg">
+                                Entrar
+                            </button>
+                        </div>
+                        <button onclick="setScreen('home')" class="w-full p-4 text-gray-500 font-bold text-lg">Voltar à Home</button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-3xl shadow-xl space-y-6">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4 border-b pb-4">
+                        <h2 class="text-3xl font-extrabold text-primary dark:text-blue-400">Painel Administrativo</h2>
+                        <div class="flex gap-2">
+                             <button onclick="fetchDataJSONP()" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm">🔄 Atualizar Lista</button>
+                             <button onclick="state.isAdminAuthenticated = false; render();" class="bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm">Sair</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex bg-gray-100 dark:bg-gray-700 p-2 rounded-2xl gap-2 mb-6">
+                        <button onclick="state.adminTab = 'registros'; state.adminEditingConseg = null; render();" class="flex-1 p-4 rounded-xl font-bold text-lg ${state.adminTab === 'registros' ? 'bg-white shadow-md text-primary' : 'text-gray-500'}">📋 Registros</button>
+                        <button onclick="state.adminTab = 'consegs'; state.adminEditingConseg = null; render();" class="flex-1 p-4 rounded-xl font-bold text-lg ${state.adminTab === 'consegs' ? 'bg-white shadow-md text-primary' : 'text-gray-500'}">🛡️ CONSEGs</button>
+                    </div>
+
+                    ${state.adminTab === 'registros' ? renderAdminRegistros() : renderAdminConsegs()}
+
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold text-xl mt-8">Voltar ao Menu Inicial</button>
+                </div>
+            `;
+        }
+
+        function renderAdminRegistros() {
+            const filtered = state.registrations.filter(r => {
+                const startOk = !state.filterPeriodStart || new Date(r.createdAt) >= new Date(state.filterPeriodStart);
+                const endOk = !state.filterPeriodEnd || new Date(r.createdAt) <= new Date(state.filterPeriodEnd);
+                const statusOk = !state.filterStatus || r.status === state.filterStatus;
+                const consegOk = !state.filterConseg || r.consegId === state.filterConseg;
+                return startOk && endOk && statusOk && consegOk;
+            }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            return `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 dark:bg-gray-700 p-4 rounded-2xl">
+                        <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render()" class="p-2 border rounded-lg text-sm dark:bg-gray-600">
+                        <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render()" class="p-2 border rounded-lg text-sm dark:bg-gray-600">
+                        <select onchange="state.filterStatus = this.value; render()" class="p-2 border rounded-lg text-sm dark:bg-gray-600 font-bold">
+                            <option value="">Status (Todos)</option>
+                            <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                            <option value="Em Andamento" ${state.filterStatus === 'Em Andamento' ? 'selected' : ''}>Em Andamento</option>
+                            <option value="Resolvido" ${state.filterStatus === 'Resolvido' ? 'selected' : ''}>Resolvido</option>
+                            <option value="Fechado" ${state.filterStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                        </select>
+                        <select onchange="state.filterConseg = this.value; render()" class="p-2 border rounded-lg text-sm dark:bg-gray-600 font-bold">
+                            <option value="">CONSEG (Todos)</option>
+                            ${state.consegs.map(c => `<option value="${c.id}" ${state.filterConseg === c.id ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-700">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                    <th class="p-4 font-bold border-b">Data</th>
+                                    <th class="p-4 font-bold border-b">Nome</th>
+                                    <th class="p-4 font-bold border-b">Assunto</th>
+                                    <th class="p-4 font-bold border-b">Status</th>
+                                    <th class="p-4 font-bold border-b">Mapa</th>
+                                    <th class="p-4 font-bold border-b">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${state.loading ? '<tr><td colspan="6" class="p-10 text-center animate-pulse font-bold text-xl">Atualizando registros...</td></tr>' : (filtered.length === 0 ? '<tr><td colspan="6" class="p-10 text-center font-bold">Nenhum registro encontrado.</td></tr>' : filtered.map(r => `
+                                    <tr key="${r.id}" class="border-b hover:bg-gray-50 dark:hover:bg-gray-800">
+                                        <td class="p-4 text-xs">${new Date(r.createdAt).toLocaleDateString('pt-BR')}</td>
+                                        <td class="p-4 font-bold text-xs">${r.userName}</td>
+                                        <td class="p-4 text-xs">${r.subject.substring(0, 30)}...</td>
+                                        <td class="p-4">
+                                            <select onchange="updateRegStatus('${r.id}', this.value)" class="p-1 border rounded bg-white dark:bg-gray-600 text-[10px] font-bold">
+                                                <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                                                <option value="Em Andamento" ${r.status === 'Em Andamento' ? 'selected' : ''}>Andamento</option>
+                                                <option value="Resolvido" ${r.status === 'Resolvido' ? 'selected' : ''}>Resolvido</option>
+                                                <option value="Fechado" ${r.status === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                                            </select>
+                                        </td>
+                                        <td class="p-4">
+                                            ${r.latitude ? `<button onclick="window.open('https://www.google.com/maps?q=${r.latitude},${r.longitude}')" class="text-blue-500 font-bold text-[10px]">📍 Ver</button>` : '---'}
+                                        </td>
+                                        <td class="p-4">
+                                            <button onclick="deleteReg('${r.id}')" class="text-red-500 font-bold">🗑️</button>
+                                        </td>
+                                    </tr>
+                                `).join(''))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdminConsegs() {
+            if (state.adminEditingConseg) {
+                return renderConsegForm();
+            }
+
+            return `
+                <div class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-2xl font-bold">Gestão de CONSEGs</h3>
+                        <button onclick="state.adminEditingConseg = {}; render();" class="bg-green-600 text-white px-4 py-2 rounded-xl font-bold text-sm">+ Incluir Novo</button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4">
+                        ${state.loading ? '<p class="text-center animate-pulse">Atualizando...</p>' : (state.consegs.length === 0 ? '<p class="text-center py-10">Nenhum CONSEG cadastrado.</p>' : state.consegs.map(c => `
+                            <div key="${c.id}" class="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border flex justify-between items-center shadow-sm">
+                                <div>
+                                    <p class="font-extrabold text-lg">${c.nome}</p>
+                                    <p class="text-sm text-gray-500">${c.ativo ? '✅ Ativo' : '❌ Inativo'} | E-mail: ${c.email || '---'}</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="editConseg('${c.id}')" class="bg-amber-500 text-white p-3 rounded-xl shadow">✏️</button>
+                                    <button onclick="deleteConseg('${c.id}')" class="bg-red-500 text-white p-3 rounded-xl shadow">🗑️</button>
+                                </div>
+                            </div>
+                        `).join(''))}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderConsegForm() {
+            const c = state.adminEditingConseg;
+            return `
+                <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-3xl shadow-inner space-y-4">
+                    <div class="flex justify-between items-center border-b pb-2">
+                        <h3 class="text-2xl font-bold">${c.id ? 'Editar CONSEG' : 'Novo CONSEG'}</h3>
+                        <button onclick="state.adminEditingConseg = null; render();" class="text-red-500 font-bold">X</button>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block font-bold mb-1">Nome do CONSEG *</label>
+                            <input type="text" id="conseg-nome" value="${c.nome || ''}" maxlength="60" class="w-full p-3 border rounded-xl dark:bg-gray-600" placeholder="Nome Completo">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block font-bold mb-1">Senha (Até 8 dígitos)</label>
+                                <input type="text" id="conseg-senha" value="${c.senha || ''}" maxlength="8" class="w-full p-3 border rounded-xl dark:bg-gray-600" placeholder="********">
+                            </div>
+                            <div>
+                                <label class="block font-bold mb-1">Status</label>
+                                <select id="conseg-ativo" class="w-full p-3 border rounded-xl dark:bg-gray-600 font-bold">
+                                    <option value="true" ${c.ativo !== false ? 'selected' : ''}>Ativo</option>
+                                    <option value="false" ${c.ativo === false ? 'selected' : ''}>Inativo</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">E-mail para Notificações</label>
+                            <input type="email" id="conseg-email" value="${c.email || ''}" class="w-full p-3 border rounded-xl dark:bg-gray-600" placeholder="exemplo@gmail.com">
+                        </div>
+                        <div>
+                            <label class="block font-bold mb-1">Agenda deste CONSEG</label>
+                            <textarea id="conseg-agenda" class="w-full p-3 border rounded-xl dark:bg-gray-600" placeholder="Informações de reuniões...">${c.agenda || ''}</textarea>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-6">
+                        <button onclick="saveConseg()" class="bg-green-600 text-white p-4 rounded-xl font-bold text-xl shadow-lg">Salvar</button>
+                        <button onclick="state.adminEditingConseg = null; render();" class="bg-gray-500 text-white p-4 rounded-xl font-bold text-xl shadow-lg">Cancelar</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- AÇÕES ---
+        function handleAdminLogin() {
+            const senhaInput = document.getElementById('admin-pass');
+            const senhaDigitada = senhaInput ? senhaInput.value : '';
+            if (senhaDigitada === ADMIN_PASSWORD_LOCAL) {
+                state.isAdminAuthenticated = true;
+                state.screen = 'admin';
+                render(); 
+                fetchDataJSONP();
+            } else {
+                alert('Senha Incorreta!');
+            }
+        }
+
+        function saveConseg() {
+            const nomeInput = document.getElementById('conseg-nome');
+            const senhaInput = document.getElementById('conseg-senha');
+            const ativoInput = document.getElementById('conseg-ativo');
+            const emailInput = document.getElementById('conseg-email');
+            const agendaInput = document.getElementById('conseg-agenda');
+
+            if (!nomeInput.value) { alert("Nome é obrigatório!"); return; }
+
+            const dados = {
+                id: state.adminEditingConseg.id || Date.now().toString(),
+                nome: nomeInput.value,
+                senha: senhaInput.value,
+                ativo: ativoInput.value === 'true',
+                email: emailInput.value,
+                agenda: agendaInput.value
+            };
+
+            fetch(DIRECT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ type: 'save_conseg', payload: dados })
+            });
+
+            alert('Solicitação enviada!');
+            fetchDataJSONP(); 
+            state.adminEditingConseg = null;
+            state.loading = true;
+            render();
+        }
+
+        function postToCloud(type, payload) {
+            fetch(DIRECT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ type, payload })
+            });
+            return true;
+        }
+
+        function updateRegStatus(id, newStatus) {
+            const reg = state.registrations.find(r => String(r.id) === String(id));
+            if (!reg) return;
+            reg.status = newStatus;
+            postToCloud('registration', reg);
+            alert('Atualização enviada!');
+            render();
+        }
+
+        function deleteReg(id) {
+            if (confirm("Excluir registro permanentemente?")) {
+                postToCloud('delete_registration', { id });
+                alert('Solicitação de exclusão enviada!');
+                fetchDataJSONP(); 
+                state.registrations = state.registrations.filter(r => String(r.id) !== String(id));
+                render();
+            }
+        }
+
+        function deleteConseg(id) {
+            if (confirm("Excluir este CONSEG permanentemente?")) {
+                postToCloud('delete_conseg', { id });
+                alert('Solicitação de exclusão de CONSEG enviada!');
+                fetchDataJSONP(); 
+                state.consegs = state.consegs.filter(c => String(c.id) !== String(id));
+                render();
+            }
+        }
+
+        function editConseg(id) {
+            const c = state.consegs.find(con => String(con.id) === String(id));
+            if (c) {
+                state.adminEditingConseg = { ...c };
+                console.log("Editando CONSEG:", state.adminEditingConseg);
+                render();
+            } else {
+                console.warn("CONSEG não encontrado para edição:", id);
+            }
+        }
+
+        // --- OUTRAS TELAS ---
         function renderOuvidoria() {
             if (state.ouvidoriaView === 'login') {
                 return `
                     <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6">
-                        <h2 class="text-3xl font-bold text-center">Registrar Processo da Ouvidoria</h2>
+                        <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Registrar Processo da Ouvidoria</h2>
                         <div class="space-y-4">
                             <label class="block font-bold">Seu primeiro nome</label>
                             <input type="text" id="ov-name" value="${state.ouvidoriaUser}" oninput="state.ouvidoriaUser = maskName(this.value); this.value = state.ouvidoriaUser" placeholder="MARCOS" class="w-full p-4 border rounded-xl dark:bg-gray-700">
@@ -269,29 +598,29 @@
                             <button onclick="state.ouvidoriaView = 'login'; render();" class="text-primary font-bold">Trocar Usuário</button>
                         </div>
                         <div class="space-y-4 max-h-[400px] overflow-y-auto">
-                            ${regs.length === 0 ? '<p class="text-center py-8">Nenhum registro encontrado.</p>' : regs.map(r => `
-                                <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border-l-8 border-primary flex justify-between items-center">
+                            ${state.loading ? '<p class="text-center py-8 animate-pulse font-bold">Buscando...</p>' : (regs.length === 0 ? '<p class="text-center py-8 text-gray-400 font-bold">Nenhum registro encontrado.</p>' : regs.map(r => `
+                                <div key="${r.id}" class="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl border-l-8 border-primary flex justify-between items-center">
                                     <div>
                                         <p class="font-bold text-xl">${r.subject}</p>
                                         <p class="text-sm">Status: ${r.status} | Data: ${new Date(r.createdAt).toLocaleDateString()}</p>
                                     </div>
                                     <div class="flex gap-2">
-                                        <button onclick="editReg('${r.id}')" class="p-2 bg-amber-500 text-white rounded-lg">✏️</button>
-                                        <button onclick="deleteReg('${r.id}')" class="p-2 bg-red-500 text-white rounded-lg">🗑️</button>
+                                        <button onclick="editOuvidoria('${r.id}')" class="p-2 bg-amber-500 text-white rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                                        <button onclick="deleteReg('${r.id}')" class="p-2 bg-red-500 text-white rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                                     </div>
                                 </div>
-                            `).join('')}
+                            `).join(''))}
                         </div>
                         <div class="flex gap-4">
-                            <button onclick="state.ouvidoriaView = 'form'; render();" class="flex-1 bg-green-600 text-white p-5 rounded-xl font-bold">+ Novo Registro</button>
-                            <button onclick="state.ouvidoriaView = 'login'; render();" class="flex-1 bg-gray-500 text-white p-5 rounded-xl font-bold">Voltar</button>
+                            <button onclick="state.ouvidoriaView = 'form'; render();" class="flex-1 bg-green-600 text-white p-5 rounded-xl font-bold text-xl">+ Novo</button>
+                            <button onclick="state.ouvidoriaView = 'login'; render();" class="flex-1 bg-gray-500 text-white p-5 rounded-xl font-bold text-xl">Voltar</button>
                         </div>
                     </div>
                 `;
             }
 
             if (state.ouvidoriaView === 'form') {
-                const editObj = state.registrations.find(r => r.id === state.ouvidoriaEditingId) || {};
+                const editObj = state.registrations.find(r => String(r.id) === String(state.ouvidoriaEditingId)) || {};
                 return `
                     <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6">
                         <h2 class="text-3xl font-bold">${state.ouvidoriaEditingId ? 'Editar Registro' : 'Novo Registro'}</h2>
@@ -302,7 +631,7 @@
                                 ${state.consegs.filter(c => c.ativo).map(c => `<option value="${c.id}" ${editObj.consegId === c.id ? 'selected' : ''}>${c.nome}</option>`).join('')}
                             </select>
                             <label class="block font-bold">Assunto *</label>
-                            <textarea id="form-subject" class="w-full p-4 border rounded-xl dark:bg-gray-700 min-h-[150px]">${editObj.subject || ''}</textarea>
+                            <textarea id="form-subject" class="w-full p-4 border rounded-xl dark:bg-gray-700 min-h-[150px] font-bold">${editObj.subject || ''}</textarea>
                             <div class="grid grid-cols-2 gap-4">
                                 <button onclick="handlePaste()" class="p-3 bg-gray-200 dark:bg-gray-600 rounded-lg font-bold">📋 Colar</button>
                                 <button onclick="document.getElementById('form-subject').value = ''" class="p-3 bg-gray-200 dark:bg-gray-600 rounded-lg font-bold">🧹 Limpar</button>
@@ -310,224 +639,20 @@
                             <label class="block font-bold">Nº do Processo (Opcional)</label>
                             <input type="text" id="form-proc" oninput="this.value = maskProcessNumber(this.value)" value="${editObj.processNumber || ''}" placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl dark:bg-gray-700">
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <button onclick="saveOuvidoria()" class="bg-green-600 text-white p-5 rounded-xl font-bold text-xl">💾 Salvar</button>
-                            <button onclick="state.ouvidoriaView = 'list'; state.ouvidoriaEditingId = null; render();" class="bg-gray-500 text-white p-5 rounded-xl font-bold text-xl">❌ Cancelar</button>
+                        <div class="grid grid-cols-2 gap-4 mt-6">
+                            <button onclick="saveOuvidoriaPost()" class="bg-green-600 text-white p-5 rounded-2xl font-bold text-xl shadow-lg">💾 Salvar</button>
+                            <button onclick="state.ouvidoriaView = 'list'; state.ouvidoriaEditingId = null; render();" class="bg-gray-500 text-white p-5 rounded-2xl font-bold text-xl shadow-lg">❌ Cancelar</button>
                         </div>
                     </div>
                 `;
             }
         }
 
-        function renderEmergencia() {
-            const list = [
-                ["Polícia Militar", "190"], ["SAMU", "192"], ["Bombeiros", "193"], ["Guarda Municipal", "153"], ["Polícia Civil", "181"],
-                ["Águas de Joinville", "115"], ["CELESC", "0800480196"], ["Denúncia Criança/Idoso", "100"], ["Violência Mulher", "180"], ["Prevenção Suicídio (CVV)", "188"]
-            ];
-            return `
-                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
-                    <h2 class="text-3xl font-bold text-red-600 mb-6">🚨 Telefones de EMERGÊNCIA</h2>
-                    ${list.map(l => `<button onclick="window.open('tel:${l[1]}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-red-500"><span>${l[0]} (${l[1]})</span> 📞</button>`).join('')}
-                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
-                </div>
-            `;
-        }
-
-        function renderServicos() {
-            const list = [
-                ["Recolhimento Móveis/Animais", "34410400"], ["Disk Coleta (Lixo Eletrônico)", "30277115"], ["Prefeitura Joinville", "34313233"]
-            ];
-            return `
-                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
-                    <h2 class="text-3xl font-bold text-teal-600 mb-6">🛠️ Telefones de SERVIÇOS</h2>
-                    ${list.map(l => `<button onclick="window.open('tel:${l[1]}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-teal-500"><span>${l[0]}</span> 📞</button>`).join('')}
-                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
-                </div>
-            `;
-        }
-
-        function renderAgenda() {
-            return `
-                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
-                    <h2 class="text-3xl font-bold text-purple-600 mb-6">📅 Agenda do CONSEG</h2>
-                    <select onchange="updateAgendaView(this.value)" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold">
-                        <option value="">-- Selecione o CONSEG --</option>
-                        ${state.consegs.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
-                    </select>
-                    <div id="agenda-display" class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl min-h-[100px] text-xl font-bold">
-                        Selecione um CONSEG para ver a agenda.
-                    </div>
-                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
-                </div>
-            `;
-        }
-
-        function renderAdmin() {
-            if (!state.isAdminAuthenticated) {
-                return `
-                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto">
-                        <h2 class="text-3xl font-bold text-center">Painel Administrativo</h2>
-                        <div id="admin-login-area">
-                            <label class="block font-bold mb-2">Acesso Restrito</label>
-                            <input type="password" id="admin-pass" placeholder="Senha Administrativa" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
-                            <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold text-xl flex items-center justify-center gap-2">
-                                ${state.loadingAdmin ? '<span class="animate-spin">⏳</span> Verificando...' : 'Entrar'}
-                            </button>
-                        </div>
-                        <button onclick="setScreen('home')" class="w-full p-4 text-gray-500 font-bold">Voltar</button>
-                    </div>
-                `;
-            }
-
-            // Admin Logged In UI
-            return `
-                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-3xl font-bold">Painel Administrativo</h2>
-                        <button onclick="state.isAdminAuthenticated = false; render();" class="text-red-500 font-bold">Sair</button>
-                    </div>
-                    
-                    <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
-                        <button onclick="state.adminTab = 'registros'; render();" class="flex-1 p-3 rounded-lg font-bold ${state.adminTab === 'registros' ? 'bg-white shadow' : ''}">Registros</button>
-                        <button onclick="state.adminTab = 'consegs'; render();" class="flex-1 p-3 rounded-lg font-bold ${state.adminTab === 'consegs' ? 'bg-white shadow' : ''}">CONSEGs</button>
-                    </div>
-
-                    ${state.adminTab === 'registros' ? renderAdminRegistros() : renderAdminConsegs()}
-
-                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
-                </div>
-            `;
-        }
-
-        function renderAdminRegistros() {
-            const regs = state.registrations.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
-            return `
-                <div class="space-y-4">
-                    <div class="overflow-x-auto max-h-[400px]">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-gray-100 dark:bg-gray-700">
-                                <tr>
-                                    <th class="p-2 border">Data</th>
-                                    <th class="p-2 border">Nome</th>
-                                    <th class="p-2 border">Assunto</th>
-                                    <th class="p-2 border">Status</th>
-                                    <th class="p-2 border">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${regs.map(r => `
-                                    <tr class="border-b">
-                                        <td class="p-2 border">${new Date(r.createdAt).toLocaleDateString()}</td>
-                                        <td class="p-2 border font-bold">${r.userName}</td>
-                                        <td class="p-2 border">${r.subject}</td>
-                                        <td class="p-2 border">${r.status}</td>
-                                        <td class="p-2 border">
-                                            <button onclick="deleteReg('${r.id}')" class="bg-red-500 text-white p-1 rounded">🗑️</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderAdminConsegs() {
-            return `
-                <div class="space-y-4">
-                    <h3 class="font-bold text-xl">Gestão de CONSEGs</h3>
-                    <div class="grid grid-cols-1 gap-2">
-                        ${state.consegs.map(c => `
-                            <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl flex justify-between items-center border">
-                                <span class="font-bold">${c.nome}</span>
-                                <div class="flex gap-2">
-                                    <button class="bg-amber-500 text-white p-2 rounded">✏️</button>
-                                    <button class="bg-red-500 text-white p-2 rounded">🗑️</button>
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderPresident() {
-            return `
-                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
-                    <h2 class="text-3xl font-bold">Acesso Presidente</h2>
-                    <select id="pres-conseg" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold mb-4">
-                        <option value="">-- Escolha seu CONSEG --</option>
-                        ${state.consegs.map(c => `<option value="${c.id}">${c.nome}</option>`).join('')}
-                    </select>
-                    <input type="password" id="pres-pass" placeholder="Senha do CONSEG" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
-                    <button onclick="handlePresidentLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold">Entrar</button>
-                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
-                </div>
-            `;
-        }
-
-        // --- FUNÇÕES DE AÇÃO ---
-
-        async function handleAdminLogin() {
-            const senhaDigitada = document.getElementById('admin-pass').value;
-            if (!senhaDigitada) return;
-
-            state.loadingAdmin = true;
-            render();
-
-            try {
-                // Fetch POST para verificar a senha remotamente no Google Apps Script
-                const response = await fetch(DIRECT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({ type: 'login_admin', payload: { senha: senhaDigitada } })
-                });
-                
-                // Em Web Apps do Google, POST pode retornar um objeto JSON se o script for configurado com ContentService
-                const result = await response.json();
-                
-                if (result.status === 'sucesso') {
-                    console.log("Login autorizado, carregando painel...");
-                    state.isAdminAuthenticated = true;
-                    state.loadingAdmin = false;
-                    render(); // Renderização imediata para mostrar o painel logado
-                } else {
-                    console.warn("Login negado pelo servidor.");
-                    state.loadingAdmin = false;
-                    alert("Senha Incorreta.");
-                    render();
-                }
-            } catch (e) {
-                console.error("Erro na verificação remota:", e);
-                // Fallback amigável se o servidor não retornar JSON (comum em no-cors ou configurações erradas de CORS)
-                state.loadingAdmin = false;
-                alert("Falha na comunicação com o servidor ou senha incorreta.");
-                render();
-            }
-        }
-
-        function handleOuvidoriaLogin(nextView) {
-            if (!state.ouvidoriaUser || !/^[A-Z]{3}-[0-9]{6}$/.test(state.ouvidoriaPass)) {
-                alert("Preencha nome e senha (formato AAA-999999) corretamente!");
-                return;
-            }
-            state.ouvidoriaView = nextView;
-            render();
-        }
-
-        async function saveOuvidoria() {
+        function saveOuvidoriaPost() {
             const consegId = document.getElementById('form-conseg').value;
             const subject = document.getElementById('form-subject').value;
             const proc = document.getElementById('form-proc').value;
-
-            if (!consegId || !subject) { alert("Preencha os campos obrigatórios!"); return; }
-            if (hasProfanity(subject)) { alert("O assunto contém palavras proibidas!"); return; }
-
-            let lat = 0, lon = 0;
-            try {
-                const p = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, {timeout: 3000}));
-                lat = p.coords.latitude; lon = p.coords.longitude;
-            } catch(e) {}
+            if (!consegId || !subject) { alert("Preencha CONSEG e Assunto!"); return; }
 
             const reg = {
                 id: state.ouvidoriaEditingId || Date.now().toString(),
@@ -536,35 +661,37 @@
                 consegId,
                 subject,
                 processNumber: proc,
-                status: state.ouvidoriaEditingId ? 'Em Andamento' : 'Aberto',
-                createdAt: new Date().toISOString(),
-                latitude: lat,
-                longitude: lon
+                status: state.ouvidoriaEditingId ? (state.registrations.find(r => String(r.id) === String(state.ouvidoriaEditingId)).status) : 'Aberto',
+                createdAt: new Date().toISOString()
             };
 
-            const success = await postToCloud('registration', reg);
-            if (success) {
-                state.ouvidoriaView = 'list';
-                state.ouvidoriaEditingId = null;
-                render();
-            }
+            postToCloud('registration', reg);
+            alert("Solicitação enviada!");
+            state.ouvidoriaView = 'list';
+            state.ouvidoriaEditingId = null;
+            render();
+            setTimeout(fetchDataJSONP, 1500);
         }
 
-        async function deleteReg(id) {
-            if (confirm("Excluir este registro?")) {
-                await postToCloud('delete_registration', { id });
-            }
-        }
-
-        function editReg(id) {
+        function editOuvidoria(id) {
             state.ouvidoriaEditingId = id;
             state.ouvidoriaView = 'form';
             render();
         }
 
+        function handleOuvidoriaLogin(view) {
+            if (!state.ouvidoriaUser || !/^[A-Z]{3}-[0-9]{6}$/.test(state.ouvidoriaPass)) {
+                alert("Informe nome e senha válida!");
+                return;
+            }
+            state.ouvidoriaView = view;
+            render();
+            if (state.registrations.length === 0) fetchDataJSONP();
+        }
+
         function handleGPS() {
-            navigator.geolocation.getCurrentPosition(pos => {
-                window.open(`https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`);
+            navigator.geolocation.getCurrentPosition(p => {
+                window.open(`https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`);
             }, () => alert("Erro ao obter GPS."));
         }
 
@@ -572,31 +699,7 @@
             try {
                 const t = await navigator.clipboard.readText();
                 document.getElementById('form-subject').value += t;
-            } catch(e) {
-                alert("Permissão para colar negada.");
-            }
-        }
-
-        function updateAgendaView(id) {
-            const c = state.consegs.find(con => con.id === id);
-            const box = document.getElementById('agenda-display');
-            if (c) {
-                box.innerHTML = `
-                    <p class="mb-4">${c.agenda || "Sem agenda cadastrada."}</p>
-                    <button onclick="window.location.href='mailto:${c.email || 'consegcomasaespinheiros@gmail.com'}?subject=Para o presidente do ${c.nome}'" class="w-full p-4 bg-purple-600 text-white rounded-xl">📧 Enviar E-mail</button>
-                `;
-            } else {
-                box.innerHTML = "Selecione um CONSEG para ver a agenda.";
-            }
-        }
-
-        function handlePresidentLogin() {
-            const id = document.getElementById('pres-conseg').value;
-            const p = document.getElementById('pres-pass').value;
-            const c = state.consegs.find(con => con.id === id);
-            if (c && c.senha === p) {
-                alert(`Bem vindo, Presidente do ${c.nome}!`);
-            } else alert("Senha ou CONSEG incorretos!");
+            } catch(e) { console.warn("Erro ao colar."); }
         }
 
         function handlePMSCCidadao() {
@@ -616,14 +719,89 @@
             else window.open("https://play.google.com/store/apps/details?id=br.com.celesc.app");
         }
 
-        // --- INICIALIZAÇÃO ---
-        setInterval(() => {
-            state.currentTime = new Date();
-            render();
-        }, 1000 * 60); // Atualiza o relógio a cada minuto
+        function renderEmergencia() {
+            const list = [
+                ["Polícia Militar", "190"], ["SAMU", "192"], ["Bombeiros", "193"], ["Guarda Municipal", "153"], ["Polícia Civil", "181"],
+                ["Águas de Joinville", "115"], ["CELESC", "0800 48 0196"], ["Denúncia Criança/Idoso", "100"], ["Violência Mulher", "180"], ["Prevenção Suicídio (CVV)", "188"]
+            ];
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
+                    <h2 class="text-3xl font-bold text-red-600 mb-6 flex items-center gap-2">🚨 EMERGÊNCIA</h2>
+                    ${list.map(l => `<button onclick="window.open('tel:${l[1].replace(/\s/g, '')}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-red-500"><span>${l[0]} (${l[1]})</span> 📞</button>`).join('')}
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
+                </div>
+            `;
+        }
 
-        // Carga inicial
-        loadCloudData();
+        function renderServicos() {
+            const list = [
+                ["Recolhimento Móveis/Animais", "34410400"], ["Disk Coleta (Lixo Eletrônico)", "30277115"], ["Prefeitura Joinville", "34313233"]
+            ];
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-4">
+                    <h2 class="text-3xl font-bold text-teal-600 mb-6 flex items-center gap-2">🛠️ SERVIÇOS</h2>
+                    ${list.map(l => `<button onclick="window.open('tel:${l[1]}')" class="w-full p-5 bg-gray-100 dark:bg-gray-700 rounded-xl flex justify-between items-center elderly-text border-2 border-transparent hover:border-teal-500"><span>${l[0]}</span> 📞</button>`).join('')}
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold mt-4">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderAgenda() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
+                    <h2 class="text-3xl font-bold text-purple-600 mb-6">📅 Agenda do CONSEG</h2>
+                    <select onchange="updateAgendaView(this.value)" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold">
+                        <option value="">-- Selecione o CONSEG --</option>
+                        ${state.consegs.map(c => `<option key="${c.id}" value="${c.id}">${c.nome}</option>`).join('')}
+                    </select>
+                    <div id="agenda-display" class="p-6 bg-purple-50 dark:bg-purple-900/10 rounded-2xl min-h-[100px] text-xl font-bold">
+                        Selecione um CONSEG para ver a agenda.
+                    </div>
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
+                </div>
+            `;
+        }
+
+        function updateAgendaView(id) {
+            const c = state.consegs.find(con => String(con.id) === String(id));
+            const box = document.getElementById('agenda-display');
+            if (c) {
+                box.innerHTML = `
+                    <p class="mb-4 text-gray-700 dark:text-gray-300">${c.agenda || "Sem agenda cadastrada."}</p>
+                    <button onclick="window.location.href='mailto:${c.email || 'consegcomasaespinheiros@gmail.com'}?subject=Para o presidente do ${c.nome}'" class="w-full p-4 bg-purple-600 text-white rounded-xl shadow-lg font-bold">📧 Enviar E-mail</button>
+                `;
+            } else {
+                box.innerHTML = "Selecione um CONSEG para ver a agenda.";
+            }
+        }
+
+        function renderPresident() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto">
+                    <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Acesso Presidente</h2>
+                    <select id="pres-conseg" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold mb-4">
+                        <option value="">-- Escolha seu CONSEG --</option>
+                        ${state.consegs.filter(c => c.ativo).map(c => `<option key="${c.id}" value="${c.id}">${c.nome}</option>`).join('')}
+                    </select>
+                    <input type="password" id="pres-pass" placeholder="Senha do CONSEG" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4 font-bold">
+                    <button onclick="handlePresidentLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold text-2xl shadow-lg">Entrar</button>
+                    <button onclick="setScreen('home')" class="w-full p-4 text-gray-500 font-bold text-lg">Voltar</button>
+                </div>
+            `;
+        }
+
+        function handlePresidentLogin() {
+            const id = document.getElementById('pres-conseg').value;
+            const p = document.getElementById('pres-pass').value;
+            const c = state.consegs.find(con => String(con.id) === String(id));
+            if (c && c.senha === p) {
+                alert(`Bem vindo, Presidente do ${c.nome}!`);
+            } else alert("Senha ou CONSEG incorretos!");
+        }
+
+        // INICIALIZAÇÃO
+        setInterval(() => { state.currentTime = new Date(); render(); }, 30000);
+        fetchDataJSONP();
         render();
 
     </script>
