@@ -37,6 +37,7 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200 min-h-screen">
 
@@ -47,7 +48,6 @@
     <script>
         // --- CONFIGURAÇÕES E CONSTANTES ---
         const DIRECT_URL = 'https://script.google.com/macros/s/AKfycbzn2NSn77z4nsNOyDSyfT5_YKBLimBdN4X1oVa0MSxJbpqIjFrCuJ4rwhpiRSyBrE1l/exec';
-        const ADMIN_PASSWORD = '30012026';
         const PROFANITY_LIST = ['palavrao1', 'palavrao2', 'merda', 'porra', 'caralho', 'foda', 'puta', 'vagabundo', 'idiota'];
 
         // --- ESTADO GLOBAL DO APLICATIVO ---
@@ -58,6 +58,10 @@
             registrations: [],
             consegs: [],
             loading: false,
+            // Admin Panel State
+            adminLogged: false,
+            loadingAdmin: false,
+            adminTab: 'registros', // 'registros' | 'consegs'
             // Dados da sessão de ouvidoria
             ouvidoriaUser: '',
             ouvidoriaPass: '',
@@ -358,15 +362,91 @@
         }
 
         function renderAdmin() {
-            // Implementação resumida do painel admin
+            if (!state.adminLogged) {
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto">
+                        <h2 class="text-3xl font-bold text-center">Painel Administrativo</h2>
+                        <div id="admin-login-area">
+                            <label class="block font-bold mb-2">Acesso Restrito</label>
+                            <input type="password" id="admin-pass" placeholder="Senha Administrativa" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
+                            <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold text-xl flex items-center justify-center gap-2">
+                                ${state.loadingAdmin ? '<span class="animate-spin">⏳</span> Verificando...' : 'Entrar'}
+                            </button>
+                        </div>
+                        <button onclick="setScreen('home')" class="w-full p-4 text-gray-500 font-bold">Voltar</button>
+                    </div>
+                `;
+            }
+
+            // Admin Logged In UI
             return `
                 <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6">
-                    <h2 class="text-3xl font-bold">Painel Administrativo</h2>
-                    <div id="admin-login-area">
-                        <input type="password" id="admin-pass" placeholder="Senha Administrativa" class="w-full p-4 border rounded-xl dark:bg-gray-700 mb-4">
-                        <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold">Entrar</button>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-3xl font-bold">Painel Administrativo</h2>
+                        <button onclick="state.adminLogged = false; render();" class="text-red-500 font-bold">Sair</button>
                     </div>
+                    
+                    <div class="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
+                        <button onclick="state.adminTab = 'registros'; render();" class="flex-1 p-3 rounded-lg font-bold ${state.adminTab === 'registros' ? 'bg-white shadow' : ''}">Registros</button>
+                        <button onclick="state.adminTab = 'consegs'; render();" class="flex-1 p-3 rounded-lg font-bold ${state.adminTab === 'consegs' ? 'bg-white shadow' : ''}">CONSEGs</button>
+                    </div>
+
+                    ${state.adminTab === 'registros' ? renderAdminRegistros() : renderAdminConsegs()}
+
                     <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold">Voltar</button>
+                </div>
+            `;
+        }
+
+        function renderAdminRegistros() {
+            const regs = state.registrations.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            return `
+                <div class="space-y-4">
+                    <div class="overflow-x-auto max-h-[400px]">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                    <th class="p-2 border">Data</th>
+                                    <th class="p-2 border">Nome</th>
+                                    <th class="p-2 border">Assunto</th>
+                                    <th class="p-2 border">Status</th>
+                                    <th class="p-2 border">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${regs.map(r => `
+                                    <tr class="border-b">
+                                        <td class="p-2 border">${new Date(r.createdAt).toLocaleDateString()}</td>
+                                        <td class="p-2 border font-bold">${r.userName}</td>
+                                        <td class="p-2 border">${r.subject}</td>
+                                        <td class="p-2 border">${r.status}</td>
+                                        <td class="p-2 border">
+                                            <button onclick="deleteReg('${r.id}')" class="bg-red-500 text-white p-1 rounded">🗑️</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAdminConsegs() {
+            return `
+                <div class="space-y-4">
+                    <h3 class="font-bold text-xl">Gestão de CONSEGs</h3>
+                    <div class="grid grid-cols-1 gap-2">
+                        ${state.consegs.map(c => `
+                            <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-xl flex justify-between items-center border">
+                                <span class="font-bold">${c.nome}</span>
+                                <div class="flex gap-2">
+                                    <button class="bg-amber-500 text-white p-2 rounded">✏️</button>
+                                    <button class="bg-red-500 text-white p-2 rounded">🗑️</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
         }
@@ -387,6 +467,43 @@
         }
 
         // --- FUNÇÕES DE AÇÃO ---
+
+        async function handleAdminLogin() {
+            const senhaDigitada = document.getElementById('admin-pass').value;
+            if (!senhaDigitada) return;
+
+            state.loadingAdmin = true;
+            render();
+
+            try {
+                // Fetch regular para poder ler a resposta JSON
+                const response = await fetch(DIRECT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ type: 'login_admin', payload: { senha: senhaDigitada } })
+                });
+                
+                // Em Web Apps do Google, POST pode retornar 302, mas fetch lida com isso se CORS estiver OK.
+                // No entanto, muitas vezes o Web App retorna HTML ou é opaco no POST. 
+                // Se o script retornar JSON corretamente:
+                const result = await response.json();
+                
+                if (result.status === 'sucesso') {
+                    alert("Acesso Administrativo Liberado!");
+                    state.adminLogged = true;
+                } else {
+                    alert("Senha Incorreta.");
+                }
+            } catch (e) {
+                // Fallback para quando o servidor retorna 200 via no-cors ou similar, mas o JSON falha.
+                // Como não podemos ler o corpo da resposta em no-cors, essa abordagem segura via servidor
+                // requer que o Google Apps Script tenha o Content-Service configurado com CORS headers.
+                console.error("Erro na verificação remota:", e);
+                alert("Falha na comunicação com o servidor ou senha incorreta.");
+            } finally {
+                state.loadingAdmin = false;
+                render();
+            }
+        }
 
         function handleOuvidoriaLogin(nextView) {
             if (!state.ouvidoriaUser || !/^[A-Z]{3}-[0-9]{6}$/.test(state.ouvidoriaPass)) {
@@ -451,8 +568,12 @@
         }
 
         async function handlePaste() {
-            const t = await navigator.clipboard.readText();
-            document.getElementById('form-subject').value += t;
+            try {
+                const t = await navigator.clipboard.readText();
+                document.getElementById('form-subject').value += t;
+            } catch(e) {
+                alert("Permissão para colar negada.");
+            }
         }
 
         function updateAgendaView(id) {
@@ -468,21 +589,12 @@
             }
         }
 
-        function handleAdminLogin() {
-            const p = document.getElementById('admin-pass').value;
-            if (p === ADMIN_PASSWORD) {
-                alert("Acesso Administrativo Liberado via Planilha!");
-                window.open('https://docs.google.com/spreadsheets/d/1XyO3Kx7U0M0Yp3m7rS_2S0oY-P7N9F_Xk8mX8X8X8X8/edit', '_blank');
-            } else alert("Senha Admin Incorreta!");
-        }
-
         function handlePresidentLogin() {
             const id = document.getElementById('pres-conseg').value;
             const p = document.getElementById('pres-pass').value;
             const c = state.consegs.find(con => con.id === id);
             if (c && c.senha === p) {
                 alert(`Bem vindo, Presidente do ${c.nome}!`);
-                // No app real, aqui abriria as ferramentas de edição de agenda
             } else alert("Senha ou CONSEG incorretos!");
         }
 
@@ -514,5 +626,6 @@
         render();
 
     </script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>
