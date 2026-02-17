@@ -791,8 +791,8 @@
                                 </div>
                                 ${valid ? `
                                 <div class="absolute top-4 right-4 flex flex-col gap-2">
-                                    <button class="link-editar bg-blue-500 text-white p-3 rounded-xl shadow hover:bg-blue-600 transition-colors" data-id="${r.id}" title="Ajustar Registro">✏️</button>
-                                    <button onclick="handleDeleteOuvidoria('${r.id}')" class="bg-red-500 text-white p-3 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
+                                    <button onclick="window.abrirEdicaoOuvidoria('${r.id}')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Ajustar Registro">✏️</button>
+                                    <button onclick="handleDeleteOuvidoria('${r.id}')" class="bg-red-500 text-white p-4 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
                                 </div>
                                 ` : ''}
                             </div>
@@ -958,8 +958,8 @@
         fetchAppVersion();
         fetchDataJSONP(); render();
 
-        // --- FUNÇÃO EDITAR ISOLADA ---
-        function abrirEdicaoOuvidoria(id) {
+        // --- FUNÇÃO EDITAR ISOLADA E GLOBAL PARA MOBILE ---
+        window.abrirEdicaoOuvidoria = function(id) {
           const reg = window.ultimosRegistros.find(r => String(r.id) === String(id));
           if (!reg) return;
           registroParaEditar = reg; 
@@ -992,16 +992,7 @@
             }
             if (++tentativas > 20) clearInterval(checkExist);
           }, 100);
-        }
-
-        // --- CAPTURA GLOBAL (ESCUTADOR) ---
-        document.addEventListener('click', function(e) {
-          const link = e.target.closest('.link-editar');
-          if (link) {
-            const id = link.getAttribute('data-id');
-            abrirEdicaoOuvidoria(id);
-          }
-        });
+        };
     </script>
 <script type="module" src="/index.tsx"></script>
 </body>
