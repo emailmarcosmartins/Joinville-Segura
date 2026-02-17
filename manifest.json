@@ -2,7 +2,7 @@
   "name": "Joinville Segura",
   "short_name": "Joinville Segura (CONSEG)",
   "description": "Sistema Comunitário de Segurança Pública de Joinville",
-  "start_url": "/Joinville-Segura/index.html",
+  "start_url": "/Joinville-Segura/",
   "scope": "/Joinville-Segura/",
   "display": "standalone",
   "orientation": "portrait",
@@ -21,3 +21,4 @@
     }
   ]
 }
+
