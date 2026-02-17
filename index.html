@@ -33,6 +33,9 @@
         .status-border-pendente { border-left-color: #ef4444 !important; } /* Vermelho */
         .status-border-andamento { border-left-color: #f59e0b !important; } /* Amarelo */
         .status-border-concluido { border-left-color: #10b981 !important; } /* Verde */
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
     </style>
 <script type="importmap">
 {
@@ -54,6 +57,8 @@
 
     <script>
         // --- TÉCNICA JSONP GLOBAL ---
+        let registroParaEditar = null; // Variável de Suporte
+        window.ultimosRegistros = []; // Captura de Dados na Busca
         window.lastData = null;
         window.handleGoogleData = function(data) {
             let parsedData = data;
@@ -215,20 +220,23 @@
             }
 
             if (data && data.registrations) {
-                state.registrations = data.registrations.map(r => ({
+                // Ajuste de chaves para minúsculas conforme solicitado (compatibilidade com novo codigo.gs)
+                const regs = data.registrations.map(r => ({
                     id: r.id || '',
-                    userName: r.userName || r.username || '',
-                    userPassword: r.userPassword || r.userpassword || '',
-                    consegId: r.consegId || r.consegid || '',
+                    userName: r.username || r.userName || '',
+                    userPassword: r.userpassword || r.userPassword || '',
+                    consegId: r.consegid || r.consegId || '',
                     subject: r.subject || '',
-                    processNumber: r.processNumber || r.processnumber || '',
-                    processDate: r.processDate || r.processdate || '',
+                    processNumber: r.processnumber || r.processNumber || '',
+                    processDate: r.processdate || r.processDate || '',
                     status: r.status || 'Aberto',
-                    createdAt: r.createdAt || r.createdat || new Date().toISOString(),
-                    updatedAt: r.updatedAt || r.updatedat || r.createdAt || r.createdat || new Date().toISOString(),
+                    createdAt: r.createdat || r.createdAt || new Date().toISOString(),
+                    updatedAt: r.updatedat || r.updatedAt || r.createdAt || r.createdat || new Date().toISOString(),
                     latitude: r.latitude || null,
                     longitude: r.longitude || null
                 }));
+                state.registrations = regs;
+                window.ultimosRegistros = regs; 
             }
         }
 
@@ -617,13 +625,13 @@
 
         function renderEmergencia() {
             const emergencyList = [
-                { label: "Ligar para o 190 - Polícia Militar", val: "190", color: "bg-red-600" },
+                { label: "Ligar para o 190 - Polícia Militar", val: "190", color: "bg-red-700" },
                 { label: "Ligar para o 192 - SAMU", val: "192", color: "bg-red-600" },
                 { label: "Ligar para o 193 - Corpo de Bombeiros", val: "193", color: "bg-orange-600" },
-                { label: "Ligar para o 153 - Guarda Municipal", val: "153", color: "bg-orange-500" },
-                { label: "Ligar para o 181 - Polícia Civil", val: "181", color: "bg-blue-800" },
-                { label: "Ligar para o 115 - Águas de Joinville", val: "115", color: "bg-blue-800" },
-                { label: "Ligar para o 0800 48 0196 - CELESC", val: "0800480196", color: "bg-orange-500" },
+                { label: "Ligar para o 153 - Guarda Municipal", val: "153", color: "bg-blue-800" },
+                { label: "Ligar para o 181 - Polícia Civil", val: "181", color: "bg-slate-700" },
+                { label: "Ligar para o 115 - Águas de Joinville", val: "115", color: "bg-cyan-600" },
+                { label: "Ligar para o 0800 48 0196 - CELESC", val: "0800480196", color: "bg-yellow-600" },
                 { label: "Ligar para o 100 - Denunciar violência contra CRIANÇAS, ADOLESCENTES e IDOSOS", val: "100", color: "bg-purple-600" },
                 { label: "Ligar para o 180 - Denunciar violência contra a MULHER", val: "180", color: "bg-purple-600" },
                 { label: "Ligar para o 188 - Prevenção ao suicídio – CVV", val: "188", color: "bg-teal-600" }
@@ -721,14 +729,14 @@
             if (state.ouvidoriaView === 'list') {
                 const valid = isOuvidoriaValid();
                 
-                // Filtragem e Ordenação Decrescente
+                // Filtragem Global antes de Renderizar (Garante compatibilidade com minúsculas r.username)
                 let filtered = state.registrations.filter(r => 
                     String(r.userName || '').toUpperCase() === String(state.ouvidoriaUser || '').toUpperCase() && 
                     String(r.userPassword || '').toUpperCase() === String(state.ouvidoriaPass || '').toUpperCase()
                 );
 
-                // Aplicar filtros adicionais
-                if (state.filterStatus !== 'Todos') {
+                // Aplicação dos Filtros de Busca Avançada
+                if (state.filterStatus && state.filterStatus !== 'Todos') {
                     filtered = filtered.filter(r => r.status === state.filterStatus);
                 }
                 if (state.filterPeriodStart) {
@@ -740,46 +748,42 @@
                     filtered = filtered.filter(r => new Date(r.createdAt) <= endDate);
                 }
 
-                // Ordenação Decrescente por Data de Criação
+                // Ordenação: Registro mais recente no topo (Sort Descendente)
                 filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                window.ultimosRegistros = filtered;
 
                 return `<div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in">
-                    <h2 class="text-2xl font-bold text-primary dark:text-blue-400 mb-4 uppercase text-center">Meus Registros</h2>
+                    <h2 class="text-2xl font-bold text-primary dark:text-blue-400 mb-2 uppercase text-center">Meus Registros</h2>
                     
-                    <!-- Filtros de Busca -->
-                    <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-dashed border-gray-300">
-                        <p class="text-xs font-bold text-gray-400 uppercase mb-3">Filtros de Pesquisa</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
-                                <select onchange="state.filterStatus = this.value; render();" class="w-full p-2 border rounded-lg text-sm font-bold dark:bg-gray-600">
-                                    <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Todos</option>
-                                    <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
-                                    <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
-                                    <option value="Solucionado" ${state.filterStatus === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
-                                    <option value="Fechado" ${state.filterStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
-                                </select>
-                            </div>
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase">De:</label>
-                                    <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="w-full p-2 border rounded-lg text-xs dark:bg-gray-600">
-                                </div>
-                                <div>
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase">Até:</label>
-                                    <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="w-full p-2 border rounded-lg text-xs dark:bg-gray-600">
-                                </div>
-                            </div>
+                    <!-- Filtros de Busca (Interface Pequena e Discreta) -->
+                    <div class="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200">
+                        <select id="filter-status" onchange="state.filterStatus = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 font-bold outline-none">
+                            <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Status: Todos</option>
+                            <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                            <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
+                            <option value="Solucionado" ${state.filterStatus === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
+                            <option value="Fechado" ${state.filterStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                        </select>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[9px] font-bold text-gray-400 uppercase">De:</span>
+                            <input type="date" id="filter-date-start" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none">
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[9px] font-bold text-gray-400 uppercase">Até:</span>
+                            <input type="date" id="filter-date-end" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none">
                         </div>
                     </div>
 
                     <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                        ${filtered.length === 0 ? '<p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado com estes filtros.</p>' : filtered.map(r => `
+                        ${filtered.length === 0 ? '<p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado.</p>' : filtered.map(r => `
                             <div class="p-5 bg-gray-50 dark:bg-gray-700 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-sm relative group">
                                 <div class="flex flex-col gap-1 pr-16">
                                     <p class="font-bold text-gray-800 dark:text-gray-100 text-xl">${r.subject}</p>
                                     ${r.processNumber ? `<p class="text-sm font-black text-primary">Proc: ${r.processNumber}</p>` : ''}
-                                    ${r.processDate ? `<p class="text-xs font-bold text-gray-500 uppercase">Data do Processo: ${new Date(r.processDate).toLocaleDateString()}</p>` : ''}
+                                    <div class="text-[10px] flex gap-4 text-gray-500">
+                                        <span>CONSEG: ${state.consegs.find(c => c.id === r.consegId)?.nome || 'S/ Ref'}</span>
+                                        ${r.processDate ? `<span>Data Proc: ${new Date(r.processDate).toLocaleDateString()}</span>` : ''}
+                                    </div>
                                 </div>
                                 <div class="flex justify-between items-center pt-3 border-t mt-3 text-[10px] text-gray-400 italic">
                                     <span>📅 Registro: ${new Date(r.createdAt).toLocaleString()}</span>
@@ -787,7 +791,7 @@
                                 </div>
                                 ${valid ? `
                                 <div class="absolute top-4 right-4 flex flex-col gap-2">
-                                    <button onclick="handleEditOuvidoria('${r.id}')" class="bg-blue-500 text-white p-3 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Editar">✏️</button>
+                                    <button class="link-editar bg-blue-500 text-white p-3 rounded-xl shadow hover:bg-blue-600 transition-colors" data-id="${r.id}" title="Ajustar Registro">✏️</button>
                                     <button onclick="handleDeleteOuvidoria('${r.id}')" class="bg-red-500 text-white p-3 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
                                 </div>
                                 ` : ''}
@@ -795,7 +799,7 @@
                         `).join('')}
                     </div>
                     ${valid ? `
-                        <button onclick="state.ouvidoriaView = 'form'; state.ouvidoriaEditingId = null; resetOuvidoriaForm(); render();" class="w-full p-5 bg-blue-600 text-white rounded-xl font-bold shadow-lg uppercase transition-transform active:scale-95">
+                        <button onclick="state.ouvidoriaView = 'form'; state.ouvidoriaEditingId = null; registroParaEditar = null; resetOuvidoriaForm(); render();" class="w-full p-5 bg-blue-600 text-white rounded-xl font-bold shadow-lg uppercase transition-transform active:scale-95">
                             + Incluir Novo Registro
                         </button>
                     ` : ''}
@@ -804,7 +808,7 @@
             }
 
             if (state.ouvidoriaView === 'form') {
-                 const isEdit = state.ouvidoriaEditingId !== null;
+                 const isEdit = registroParaEditar !== null;
                  return `<div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in">
                     <h2 class="text-2xl font-bold text-primary dark:text-blue-400 uppercase text-center">${isEdit ? '✏️ Editar Registro' : '➕ Novo Registro'}</h2>
                     <div class="space-y-4">
@@ -812,34 +816,34 @@
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">CONSEG Destino</label>
                             <select id="form-conseg" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                                 <option value="">-- Selecione o CONSEG --</option>
-                                ${state.consegs.filter(c => c.ativo).map(c => `<option value="${c.id}" ${c.id === state.formConsegId ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                                ${state.consegs.filter(c => c.ativo).map(c => `<option value="${c.id}" ${registroParaEditar && c.id === registroParaEditar.consegId ? 'selected' : ''}>${c.nome}</option>`).join('')}
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Processo</label>
-                            <input type="text" id="reg-processNumber" maxlength="13" value="${state.formProcessNumber || ''}"
+                            <input type="text" id="reg-processNumber" maxlength="13" value="${registroParaEditar ? registroParaEditar.processNumber : ''}"
                                 oninput="let v = this.value.replace(/\\D/g, '').substring(0,10); let r = ''; if (v.length > 0) r += v.slice(0, 2); if (v.length > 2) r += '.' + v.slice(2, 3); if (v.length > 3) r += '.' + v.slice(3, 9); if (v.length > 9) r += '-' + v.slice(9, 10); this.value = r; document.getElementById('reg-date-container').style.display = v.length > 0 ? 'block' : 'none';" 
                                 placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                         </div>
-                        <div id="reg-date-container" style="display: ${state.formProcessNumber ? 'block' : 'none'};">
+                        <div id="reg-date-container" style="display: ${registroParaEditar && registroParaEditar.processNumber ? 'block' : 'none'};">
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Data do Processo</label>
-                            <input type="date" id="reg-processDate" value="${state.formProcessDate || ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
+                            <input type="date" id="reg-processDate" value="${registroParaEditar ? registroParaEditar.processDate : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Status</label>
                             <select id="reg-status" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
-                                <option value="Aberto" ${state.formStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
-                                <option value="Em andamento" ${state.formStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
-                                <option value="Solucionado" ${state.formStatus === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
-                                <option value="Fechado" ${state.formStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                                <option value="Aberto" ${registroParaEditar && registroParaEditar.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                                <option value="Em andamento" ${registroParaEditar && registroParaEditar.status === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
+                                <option value="Solucionado" ${registroParaEditar && registroParaEditar.status === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
+                                <option value="Fechado" ${registroParaEditar && registroParaEditar.status === 'Fechado' ? 'selected' : ''}>Fechado</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Assunto / Descrição</label>
-                            <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${state.formSubject || ''}</textarea>
+                            <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${registroParaEditar ? registroParaEditar.subject : ''}</textarea>
                         </div>
-                        <button onclick="handleSaveNewRegistration()" class="w-full p-5 bg-green-600 text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">Salvar Registro</button>
-                        <button onclick="state.ouvidoriaView = 'list'; state.ouvidoriaEditingId = null; render();" class="w-full p-4 bg-gray-500 text-white rounded-xl font-bold">Cancelar</button>
+                        <button onclick="handleSaveNewRegistration(event)" class="w-full p-5 bg-green-600 text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">Salvar Registro</button>
+                        <button onclick="state.ouvidoriaView = 'list'; registroParaEditar = null; state.ouvidoriaEditingId = null; render();" class="w-full p-4 bg-gray-500 text-white rounded-xl font-bold">Cancelar</button>
                     </div>
                 </div>`;
             }
@@ -851,19 +855,6 @@
             state.formProcessNumber = '';
             state.formProcessDate = '';
             state.formStatus = 'Aberto';
-        }
-
-        function handleEditOuvidoria(id) {
-            const reg = state.registrations.find(r => r.id === id);
-            if (!reg) return;
-            state.ouvidoriaEditingId = id;
-            state.formConsegId = reg.consegId;
-            state.formSubject = reg.subject;
-            state.formProcessNumber = reg.processNumber || '';
-            state.formProcessDate = reg.processDate || '';
-            state.formStatus = reg.status || 'Aberto';
-            state.ouvidoriaView = 'form';
-            render();
         }
 
         async function handleDeleteOuvidoria(id) {
@@ -885,7 +876,9 @@
             }
         }
 
-        async function handleSaveNewRegistration() {
+        async function handleSaveNewRegistration(event) {
+            if (event) event.preventDefault(); // Bloqueio do Refresh
+
             const consegId = document.getElementById('form-conseg').value;
             const subject = document.getElementById('form-subject').value;
             const processNumber = document.getElementById('reg-processNumber').value;
@@ -897,21 +890,12 @@
                 return;
             }
 
-            state.loading = true; render();
-
-            let lat = null, lon = null;
-            const coords = await new Promise((res) => {
-                if (!navigator.geolocation) return res();
-                navigator.geolocation.getCurrentPosition(
-                    (p) => res({lat: p.coords.latitude, lon: p.coords.longitude}),
-                    () => res(),
-                    { timeout: 3000 }
-                );
-            });
-            if (coords) { lat = coords.lat; lon = coords.lon; }
+            // Identificação da Operação (update_registration para edições)
+            const isUpdate = registroParaEditar !== null;
+            const finalId = isUpdate ? registroParaEditar.id : String(Date.now());
 
             const payload = {
-                id: state.ouvidoriaEditingId || String(Date.now()),
+                id: finalId, // Garante envio do ID original no update
                 userName: state.ouvidoriaUser,
                 userPassword: state.ouvidoriaPass,
                 consegId: consegId,
@@ -919,27 +903,42 @@
                 processNumber: processNumber,
                 processDate: processDate,
                 status: status,
-                createdAt: state.ouvidoriaEditingId ? state.registrations.find(r => r.id === state.ouvidoriaEditingId).createdAt : new Date().toISOString(),
-                latitude: lat,
-                longitude: lon
+                createdAt: isUpdate ? registroParaEditar.createdAt : new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                latitude: "", // Removido definitivamente GPS
+                longitude: ""
             };
 
+            // --- ATUALIZAÇÃO OTIMISTA (INSTANTÂNEA NA MEMÓRIA) ---
+            if (isUpdate) {
+                const idx = state.registrations.findIndex(r => String(r.id) === String(finalId));
+                if (idx !== -1) {
+                    state.registrations[idx] = { ...payload };
+                }
+            } else {
+                state.registrations.unshift(payload);
+            }
+
+            // MUDANÇA DE TELA E RENDERIZAÇÃO IMEDIATA
+            state.ouvidoriaView = 'list';
+            registroParaEditar = null;
+            state.ouvidoriaEditingId = null;
+            resetOuvidoriaForm();
+            render(); // A lista reflete a mudança no exato momento do clique
+
+            // --- SINCRONIZAÇÃO EM BACKGROUND (SEGUNDO PLANO) ---
+            const type = isUpdate ? 'update_registration' : 'registration';
             fetch(DIRECT_URL, { 
                 method: 'POST', 
-                mode: 'no-cors', 
-                body: JSON.stringify({ type: 'registration', payload }) 
+                body: JSON.stringify({ type: type, payload: payload }) 
             })
             .then(() => {
-                alert('Registro salvo com sucesso!');
-                state.ouvidoriaEditingId = null;
-                state.ouvidoriaView = 'list';
-                resetOuvidoriaForm();
-                return fetchDataJSONP(true);
+                // Sincronização silenciosa opcional para garantir ordem/ids definitivos
+                fetchDataJSONP(true); 
             })
-            .catch(() => {
-                alert("Erro ao salvar o registro.");
-                state.loading = false;
-                render();
+            .catch((err) => {
+                console.error("Erro no salvamento em background:", err);
+                alert("Erro ao gravar dados na nuvem. Verifique sua internet.");
             });
         }
 
@@ -958,6 +957,51 @@
         setInterval(() => fetchDataJSONP(), 120000);
         fetchAppVersion();
         fetchDataJSONP(); render();
+
+        // --- FUNÇÃO EDITAR ISOLADA ---
+        function abrirEdicaoOuvidoria(id) {
+          const reg = window.ultimosRegistros.find(r => String(r.id) === String(id));
+          if (!reg) return;
+          registroParaEditar = reg; 
+          
+          state.ouvidoriaView = 'form';
+          state.ouvidoriaEditingId = id; 
+          render();
+
+          let tentativas = 0;
+          const checkExist = setInterval(function() {
+            const campoAssunto = document.getElementById('form-subject');
+            if (campoAssunto) {
+              campoAssunto.value = reg.subject || '';
+              const procNum = document.getElementById('reg-processNumber');
+              const procDate = document.getElementById('reg-processDate');
+              const statusField = document.getElementById('reg-status');
+              const consegField = document.getElementById('form-conseg');
+
+              if (procNum) procNum.value = reg.processNumber || '';
+              if (procDate) procDate.value = reg.processDate || '';
+              if (statusField) statusField.value = reg.status || 'Aberto';
+              if (consegField) consegField.value = reg.consegId || '';
+              
+              if(reg.processNumber) {
+                  const container = document.getElementById('reg-date-container');
+                  if (container) container.style.display = 'block';
+              }
+              
+              clearInterval(checkExist);
+            }
+            if (++tentativas > 20) clearInterval(checkExist);
+          }, 100);
+        }
+
+        // --- CAPTURA GLOBAL (ESCUTADOR) ---
+        document.addEventListener('click', function(e) {
+          const link = e.target.closest('.link-editar');
+          if (link) {
+            const id = link.getAttribute('data-id');
+            abrirEdicaoOuvidoria(id);
+          }
+        });
     </script>
 <script type="module" src="/index.tsx"></script>
 </body>
