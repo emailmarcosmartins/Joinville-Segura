@@ -1,8 +1,11 @@
 {
   "name": "Joinville Segura",
-  "short_name": "Segura",
-  "start_url": "/index.html",
+  "short_name": "Joinville Segura (CONSEG)",
+  "description": "Sistema Comunitário de Segurança Pública de Joinville",
+  "start_url": "/Joinville-Segura/index.html",
+  "scope": "/Joinville-Segura/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#004080",
   "icons": [
