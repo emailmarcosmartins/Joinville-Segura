@@ -40,6 +40,11 @@
         
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+
+        /* Ajustes Mobile conforme solicitado (44px altura mínima) */
+        .admin-filter-input {
+            min-height: 44px;
+        }
     </style>
 <script type="importmap">
 {
@@ -78,7 +83,6 @@
 
         // --- CONFIGURAÇÕES E CONSTANTES ---
         const DIRECT_URL = 'https://script.google.com/macros/s/AKfycbzn2NSn77z4nsNOyDSyfT5_YKBLimBdN4X1oVa0MSxJbpqIjFrCuJ4rwhpiRSyBrE1l/exec';
-        const ADMIN_PASSWORD_LOCAL = '30012026';
         let appVersionStr = "Carregando...";
 
         // --- ESTADO GLOBAL DO APLICATIVO ---
@@ -89,18 +93,19 @@
             registrations: [],
             consegs: [],
             loading: false,
+            fetchError: false,
             isAdminAuthenticated: false,
             adminTab: 'registros',
             adminEditingConseg: null,
             filterPeriodStart: '',
             filterPeriodEnd: '',
-            filterStatus: 'Todos', // "Todos", "Aberto", "Em andamento", "Solucionado", "Fechado"
+            filterStatus: 'Todos', 
             filterConseg: '',
             ouvidoriaUser: '',
             ouvidoriaPass: '',
             ouvidoriaEditingId: null,
             ouvidoriaView: 'login',
-            presidentView: 'login', // login, dashboard
+            presidentView: 'login', 
             currentUser: null,
             formSubject: '',
             formConsegId: '',
@@ -114,17 +119,14 @@
 
         // --- SEGURANÇA (Panic Mode Silencioso via API) ---
         function sendSecurityAlert() {
-            const blockApp = () => {
-                window.location.replace('about:blank');
-            };
-
             const triggerAlert = (loc) => {
                 const payload = {
                     type: 'security_alert',
                     payload: {
                       location: loc,
-                      source: 'Login Errado',
-                      timestamp: new Date().toLocaleString('pt-BR')
+                      source: 'Tentativas de Login Admin Excedidas',
+                      targetEmail: 'ConsegComasaEspinheiros@Gmail.com',
+                      timestamp: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
                     }
                 };
 
@@ -133,18 +135,14 @@
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
-                }).finally(() => {
-                    blockApp();
-                });
-
-                setTimeout(blockApp, 2000);
+                }).catch(err => console.log("Silent alert error:", err));
             };
 
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (pos) => triggerAlert(`${pos.coords.latitude},${pos.coords.longitude}`),
                     () => triggerAlert('Localização negada/indisponível'),
-                    { timeout: 5000 }
+                    { timeout: 10000, enableHighAccuracy: true }
                 );
             } else {
                 triggerAlert('Geolocalização não suportada');
@@ -157,11 +155,11 @@
                 .then(response => {
                     const lastModified = response.headers.get('Last-Modified');
                     if (lastModified) {
-                        appVersionStr = new Date(lastModified).toLocaleString('pt-BR');
+                        appVersionStr = new Date(lastModified).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
                         const verSpan = document.getElementById('appVersion');
                         if (verSpan) verSpan.innerText = appVersionStr;
                     } else {
-                        appVersionStr = "Atualizado em " + new Date().toLocaleString('pt-BR');
+                        appVersionStr = "Atualizado em " + new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
                     }
                 })
                 .catch(() => {
@@ -198,12 +196,14 @@
                         processIncomingData(window.lastData);
                         clearInterval(dataPollingInterval);
                         state.loading = false;
+                        state.fetchError = false;
                         render();
                         resolve();
                     }
-                    if (Date.now() - startTime > 20000) {
+                    if (Date.now() - startTime > 30000) {
                         clearInterval(dataPollingInterval);
                         state.loading = false;
+                        state.fetchError = true;
                         render();
                         resolve();
                     }
@@ -224,7 +224,6 @@
             }
 
             if (data && data.registrations) {
-                // Ajuste de chaves para minúsculas conforme solicitado (compatibilidade com novo codigo.gs)
                 const regs = data.registrations.map(r => ({
                     id: r.id || '',
                     userName: r.username || r.userName || '',
@@ -259,8 +258,8 @@
 
         function render() {
             const root = document.getElementById('root');
-            const dateStr = state.currentTime.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            const timeStr = state.currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = state.currentTime.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const timeStr = state.currentTime.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
             const formattedDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
 
             let content = `
@@ -272,7 +271,7 @@
                             ${state.darkMode ? '☀️' : '🌙'}
                         </button>
                     </div>
-                    <p class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-300 text-center">Sistema Comunitário de Segurança Pública</p>
+                    <p class="text-xl md:text-2xl font-bold text-gray-700 dark:text-gray-300 text-center uppercase tracking-tighter">Sistema Comunitário de Segurança Pública</p>
                     <p class="text-lg font-bold text-gray-500 mt-2 text-center">${formattedDate} ${timeStr}</p>
                 </header>
                 
@@ -306,6 +305,8 @@
                 { label: "Acessar o APP PMSC Cidadão da Polícia Militar", color: "bg-emerald-600", icon: "👮", click: "window.open('https://www.pm.sc.gov.br/')" },
                 { label: "Registrar Boletim de Ocorrência (B.O.) na Polícia Civil", color: "bg-red-600", icon: "📑", click: "window.open('https://delegaciavirtual.sc.gov.br/')" },
                 { label: "SINESP Cidadão (Consultar veículo pela placa)", color: "bg-yellow-600", icon: "🚗", click: "window.open('https://play.google.com/store/apps/details?id=br.gov.sinesp.cidadao.android')" },
+                { label: "Polícia Científica (Obter IDENTIDADE)", color: "bg-slate-600", icon: "🆔", click: "window.open('https://www.policiacientifica.sc.gov.br/', '_blank')" },
+                { label: "ÁGUAS DE JOINVILLE", color: "bg-sky-600", icon: "💧", click: "window.open('https://www.aguasdejoinville.com.br/', '_blank')" },
                 { label: "CELESC (Energia Elétrica)", color: "bg-orange-600", icon: "⚡", click: "window.open('https://play.google.com/store/apps/details?id=br.com.celesc.app')" },
                 { label: "Telefones de EMERGÊNCIA", color: "bg-rose-600", icon: "🚨", click: "setScreen('emergencia')" },
                 { label: "Telefones de SERVIÇOS", color: "bg-teal-600", icon: "🛠️", click: "setScreen('servicos')" },
@@ -352,9 +353,9 @@
         function renderAdmin() {
             if (!state.isAdminAuthenticated) {
                 return `
-                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto animate-fade-in">
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto animate-fade-in mt-10">
                         <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Painel Administrativo</h2>
-                        <input type="password" id="admin-pass" placeholder="Senha do Sistema" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold text-2xl">
+                        <input type="password" id="admin-pass" placeholder="Senha do Sistema" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold text-2xl" onkeyup="if(event.key==='Enter') handleAdminLogin()">
                         <button onclick="handleAdminLogin()" class="w-full p-5 bg-slate-700 text-white rounded-xl font-bold text-2xl shadow-lg">Entrar</button>
                         <button onclick="setScreen('home')" class="w-full p-4 text-gray-500 font-bold text-lg">Voltar à Home</button>
                     </div>
@@ -365,32 +366,83 @@
                 <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in">
                     <div class="flex justify-between items-center border-b pb-4">
                         <h2 class="text-3xl font-extrabold text-primary dark:text-blue-400">Painel Administrativo</h2>
-                        <button onclick="state.isAdminAuthenticated = false; render();" class="bg-red-500 text-white px-4 py-2 rounded-xl font-bold">Sair</button>
+                        <div class="flex gap-2">
+                            <button onclick="fetchDataJSONP(true)" class="bg-blue-500 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
+                                🔄 Atualizar
+                            </button>
+                            <button onclick="state.isAdminAuthenticated = false; setScreen('home');" class="bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm">Sair</button>
+                        </div>
                     </div>
                     <div class="flex bg-gray-100 dark:bg-gray-700 p-2 rounded-2xl gap-2">
                         <button onclick="state.adminTab = 'registros'; render();" class="flex-1 p-4 rounded-xl font-bold ${state.adminTab === 'registros' ? 'bg-white shadow text-primary' : 'text-gray-500'}">📋 Registros</button>
                         <button onclick="state.adminTab = 'consegs'; render();" class="flex-1 p-4 rounded-xl font-bold ${state.adminTab === 'consegs' ? 'bg-white shadow text-primary' : 'text-gray-500'}">🛡️ CONSEGs</button>
                     </div>
-                    ${state.adminTab === 'registros' ? renderAdminRegistros() : renderAdminConsegs()}
+                    ${state.adminTab === 'registros' ? renderAdminFilters() + renderAdminRegistros() : renderAdminConsegs()}
                     <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold text-xl">Voltar ao Menu</button>
                 </div>
             `;
         }
 
+        function renderAdminFilters() {
+            return `
+                <div class="p-5 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-dashed border-gray-300 space-y-4">
+                    <p class="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Filtros de Busca Avançada</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
+                            <select onchange="state.filterStatus = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                                <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Todos</option>
+                                <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                                <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
+                                <option value="Solucionado" ${state.filterStatus === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
+                                <option value="Fechado" ${state.filterStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">CONSEG</label>
+                            <select onchange="state.filterConseg = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                                <option value="">Todos os CONSEGs</option>
+                                ${state.consegs.map(c => `<option value="${c.id}" ${String(state.filterConseg) === String(c.id) ? 'selected' : ''}>${c.nome}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Período De</label>
+                            <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Período Até</label>
+                            <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Realiza a validação da senha administrativa.
+         * Senha fixa definida: 1234554321
+         */
         function handleAdminLogin() {
-            const passVal = document.getElementById('admin-pass').value;
-            if (passVal === ADMIN_PASSWORD_LOCAL) { 
-                state.isAdminAuthenticated = true; 
-                state.adminAttempts = 0; 
-                render(); 
-                fetchDataJSONP(); 
+            const inputField = document.getElementById('admin-pass');
+            if (!inputField) return;
+            
+            const passVal = String(inputField.value).trim();
+            
+            // Validação local com a senha solicitada
+            if (passVal === "1234554321") {
+                state.isAdminAuthenticated = true;
+                state.adminAttempts = 0;
+                render();
+                fetchDataJSONP();
             } else {
                 state.adminAttempts++;
                 if (state.adminAttempts >= 3) {
                     sendSecurityAlert();
-                } else {
-                    alert('Senha Incorreta!');
+                    state.adminAttempts = 0; // Reseta para permitir novas tentativas ou novo ciclo de alerta
                 }
+                alert('Senha Incorreta');
+                inputField.value = '';
+                inputField.focus();
             }
         }
 
@@ -415,15 +467,15 @@
                             </div>
                             <div class="space-y-1">
                                 <label class="text-xs font-bold text-gray-400 uppercase">Senha de Acesso</label>
-                                <input type="text" id="edit-senha" value="${c.senha || ''}" class="w-full p-4 border rounded-xl dark:bg-gray-600 font-bold focus:border-primary outline-none" placeholder="Senha do Presidente">
+                                <input type="text" id="edit-senha" value="${c.senha || ''}" class="w-full p-4 border rounded-xl dark:bg-gray-600 font-bold focus:ring-2 focus:ring-primary outline-none" placeholder="Senha do Presidente">
                             </div>
                             <div class="md:col-span-2 space-y-1">
-                                <label class="text-xs font-bold text-gray-400 uppercase">Agenda e Reuniões</label>
-                                <textarea id="edit-agenda" class="w-full p-4 border rounded-xl dark:bg-gray-600 font-bold h-32 focus:border-primary outline-none" placeholder="Local, data e horário das reuniões...">${c.agenda || ''}</textarea>
+                                <label class="text-xs font-bold text-gray-400 uppercase">Agenda / Reuniões</label>
+                                <textarea id="edit-agenda" class="w-full p-4 border rounded-xl dark:bg-gray-600 font-bold h-32 focus:ring-2 focus:ring-primary outline-none" placeholder="Local, data e horário das reuniões...">${c.agenda || ''}</textarea>
                             </div>
                             <div class="md:col-span-2 space-y-1">
                                 <label class="text-xs font-bold text-gray-400 uppercase">Situação (Ativo no App)</label>
-                                <select id="edit-ativo" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold focus:border-primary outline-none">
+                                <select id="edit-ativo" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold focus:ring-2 ring-primary outline-none">
                                     <option value="true" ${c.ativo ? 'selected' : ''}>Sim (Ativo)</option>
                                     <option value="false" ${!c.ativo ? 'selected' : ''}>Não (Inativo)</option>
                                 </select>
@@ -433,7 +485,7 @@
                             <button onclick="${isNew ? 'saveNewConseg()' : 'updateConsegData()'}" class="flex-1 p-5 bg-green-600 text-white rounded-2xl font-bold text-xl shadow-lg hover:bg-green-700 transition-colors">
                                 ${isNew ? '✅ Confirmar Cadastro' : '💾 Salvar Alterações'}
                             </button>
-                            <button onclick="state.adminEditingConseg = null; render();" class="flex-1 p-5 bg-gray-500 text-white rounded-2xl font-bold text-xl shadow-lg hover:bg-gray-600 transition-colors">Cancelar</button>
+                            <button onclick="state.adminEditingConseg = null; render();" class="flex-1 p-5 bg-gray-500 text-white rounded-xl font-bold text-xl shadow-lg hover:bg-gray-600 transition-colors">Cancelar</button>
                         </div>
                     </div>
                 `;
@@ -450,7 +502,7 @@
                             <div class="p-6 bg-gray-50 dark:bg-gray-700 rounded-2xl flex justify-between items-center border hover:shadow-md transition-shadow">
                                 <div>
                                     <p class="font-black text-xl text-primary dark:text-blue-300">${c.nome} ${c.ativo ? '✅' : '❌'}</p>
-                                    <p class="text-xs text-gray-400 font-bold uppercase">${c.email || 'Sem e-mail'}</p>
+                                    <p class="text-xs text-gray-400 font-bold uppercase">${c.email || 'Sem e-mail cadastrado'}</p>
                                 </div>
                                 <div class="flex gap-2">
                                     <button onclick="editConseg('${c.id}')" class="bg-amber-500 text-white p-4 rounded-xl shadow-md hover:scale-105 transition-transform">✏️</button>
@@ -466,7 +518,7 @@
         function renderPresident() {
             if (state.presidentView === 'login') {
                 return `
-                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto animate-fade-in">
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 max-w-md mx-auto animate-fade-in mt-10">
                         <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Acesso Presidente</h2>
                         <select id="pres-conseg" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold">
                             <option value="">-- Escolha seu CONSEG --</option>
@@ -505,6 +557,31 @@
             const c = state.currentUser;
             if (!c) return `<p class='text-center'>Erro ao carregar dados.</p>`;
 
+            // Filtragem dos registros do CONSEG do presidente
+            let filtered = state.registrations.filter(r => String(r.consegId) === String(c.id));
+            
+            if (state.filterStatus && state.filterStatus !== 'Todos') {
+                filtered = filtered.filter(r => r.status === state.filterStatus);
+            }
+            if (state.filterPeriodStart) {
+                const start = new Date(state.filterPeriodStart + 'T00:00:00').getTime();
+                filtered = filtered.filter(r => new Date(r.createdAt).setHours(0,0,0,0) >= start);
+            }
+            if (state.filterPeriodEnd) {
+                const end = new Date(state.filterPeriodEnd + 'T23:59:59').getTime();
+                filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
+            }
+
+            filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            const stats = {
+                total: filtered.length,
+                aberto: filtered.filter(r => r.status === 'Aberto').length,
+                andamento: filtered.filter(r => r.status === 'Em andamento').length,
+                solucionado: filtered.filter(r => r.status === 'Solucionado').length,
+                fechado: filtered.filter(r => r.status === 'Fechado').length
+            };
+
             return `
                 <div class="space-y-8 animate-fade-in">
                     <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6 border-t-8 border-primary">
@@ -526,7 +603,7 @@
                                 <input type="text" id="profile-pass" value="${c.senha || ''}" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold focus:ring-2 ring-primary outline-none">
                             </div>
                             <div class="md:col-span-2">
-                                <label class="block font-extrabold text-lg mb-2">Agenda e Reuniões</label>
+                                <label class="block font-extrabold text-lg mb-2">Agenda / Reuniões</label>
                                 <textarea id="profile-agenda" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold min-h-[150px] focus:ring-2 ring-primary outline-none" style="white-space: pre-wrap;">${c.agenda || ''}</textarea>
                             </div>
                             <div class="md:col-span-2">
@@ -540,6 +617,68 @@
                         <button onclick="updateProfile()" class="w-full bg-green-600 text-white p-5 rounded-2xl font-bold text-2xl shadow-xl hover:bg-green-700 transition-colors">
                             💾 Salvar Alterações
                         </button>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6 border-t-8 border-blue-500">
+                        <h2 class="text-3xl font-extrabold text-blue-600 dark:text-blue-400">Registros do CONSEG</h2>
+                        
+                        <div class="flex flex-wrap items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-gray-200">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
+                                <select onchange="state.filterStatus = this.value; render();" class="p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                                    <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Todos os Status</option>
+                                    <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                                    <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
+                                    <option value="Solucionado" ${state.filterStatus === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
+                                    <option value="Fechado" ${state.filterStatus === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase">Desde</label>
+                                <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <label class="text-[10px] font-bold text-gray-500 uppercase">Até</label>
+                                <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <div class="bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Total: ${stats.total}</div>
+                            <div class="bg-red-100 text-red-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Aberto: ${stats.aberto}</div>
+                            <div class="bg-yellow-100 text-yellow-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Andamento: ${stats.andamento}</div>
+                            <div class="bg-green-100 text-green-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Solucionado: ${stats.solucionado}</div>
+                            <div class="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Fechado: ${stats.fechado}</div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4">
+                            ${filtered.length === 0 ? '<p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado para os filtros aplicados.</p>' : filtered.map(r => `
+                                <div class="bg-gray-50 dark:bg-gray-700 p-5 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-md relative">
+                                    <div class="flex flex-col gap-1 pr-14">
+                                        <div class="flex flex-wrap items-center gap-2 mb-1">
+                                            <span class="${getStatusBadgeClass(r.status)} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">${r.status}</span>
+                                            ${r.processNumber ? `<span class="font-extrabold text-sm text-primary">Proc: ${r.processNumber}</span>` : ''}
+                                        </div>
+                                        <p class="font-extrabold text-gray-800 dark:text-gray-100 text-base">${r.userName || 'Usuário'}</p>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2 leading-tight">${r.subject || 'Sem assunto'}</p>
+                                        
+                                        <div class="mt-2 flex items-center gap-2">
+                                            <label class="text-[10px] font-bold text-gray-400 uppercase">Alterar Status:</label>
+                                            <select onchange="window.handlePresidentUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[10px] font-bold dark:bg-gray-600 outline-none">
+                                                <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
+                                                <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
+                                                <option value="Solucionado" ${r.status === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
+                                                <option value="Fechado" ${r.status === 'Fechado' ? 'selected' : ''}>Fechado</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic">
+                                        <span>📅 Registro: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button onclick="state.filterStatus='Todos'; state.filterPeriodStart=''; state.filterPeriodEnd=''; render();" class="w-full p-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-300 transition-colors">Limpar Filtros</button>
                     </div>
 
                     <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold text-xl shadow-lg hover:bg-gray-600 transition-colors">Voltar ao Início</button>
@@ -637,7 +776,7 @@
                 { label: "Ligar para o 115 - Águas de Joinville", val: "115", color: "bg-cyan-600" },
                 { label: "Ligar para o 0800 48 0196 - CELESC", val: "0800480196", color: "bg-yellow-600" },
                 { label: "Ligar para o 100 - Denunciar violência contra CRIANÇAS, ADOLESCENTES e IDOSOS", val: "100", color: "bg-purple-600" },
-                { label: "Ligar para o 180 - Denunciar violência contra a MULHER", val: "180", color: "bg-purple-600" },
+                { label: "Ligar para o 180 - Denunciar violência contra a MULHER", val: "180", color: "bg-rose-600" },
                 { label: "Ligar para o 188 - Prevenção ao suicídio – CVV", val: "188", color: "bg-teal-600" }
             ];
 
@@ -705,7 +844,7 @@
         function renderOuvidoria() { 
             if (state.ouvidoriaView === 'login') { 
                 const valid = isOuvidoriaValid();
-                return `<div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6 max-w-md mx-auto animate-fade-in">
+                return `<div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6 max-w-md mx-auto animate-fade-in mt-10">
                     <h2 class="text-3xl font-bold text-center text-primary dark:text-blue-400">Minha Ouvidoria</h2>
                     <div class="space-y-1">
                         <label class="text-xs font-bold text-gray-400 uppercase">Meu primeiro NOME</label>
@@ -733,35 +872,42 @@
             if (state.ouvidoriaView === 'list') {
                 const valid = isOuvidoriaValid();
                 
-                // Filtragem Global antes de Renderizar (Garante compatibilidade com minúsculas r.username)
+                // Filtragem Global antes de Renderizar
                 let filtered = state.registrations.filter(r => 
                     String(r.userName || '').toUpperCase() === String(state.ouvidoriaUser || '').toUpperCase() && 
                     String(r.userPassword || '').toUpperCase() === String(state.ouvidoriaPass || '').toUpperCase()
                 );
 
-                // Aplicação dos Filtros de Busca Avançada
+                // Aplicação dos Filtros na Ouvidoria do Usuário
                 if (state.filterStatus && state.filterStatus !== 'Todos') {
                     filtered = filtered.filter(r => r.status === state.filterStatus);
                 }
                 if (state.filterPeriodStart) {
-                    filtered = filtered.filter(r => new Date(r.createdAt) >= new Date(state.filterPeriodStart));
+                    const start = new Date(state.filterPeriodStart + 'T00:00:00').getTime();
+                    filtered = filtered.filter(r => new Date(r.createdAt).setHours(0,0,0,0) >= start);
                 }
                 if (state.filterPeriodEnd) {
-                    const endDate = new Date(state.filterPeriodEnd);
-                    endDate.setHours(23, 59, 59);
-                    filtered = filtered.filter(r => new Date(r.createdAt) <= endDate);
+                    const end = new Date(state.filterPeriodEnd + 'T23:59:59').getTime();
+                    filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
                 }
 
-                // Ordenação: Registro mais recente no topo (Sort Descendente)
                 filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                 window.ultimosRegistros = filtered;
+
+                // --- LÓGICA DE CÁLCULO REATIVA DO RESUMO DE STATUS ---
+                const stats = {
+                    total: filtered.length,
+                    aberto: filtered.filter(r => r.status === 'Aberto').length,
+                    andamento: filtered.filter(r => r.status === 'Em andamento').length,
+                    solucionado: filtered.filter(r => r.status === 'Solucionado').length,
+                    fechado: filtered.filter(r => r.status === 'Fechado').length
+                };
 
                 return `<div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in">
                     <h2 class="text-2xl font-bold text-primary dark:text-blue-400 mb-2 uppercase text-center">Meus Registros</h2>
                     
-                    <!-- Filtros de Busca (Interface Pequena e Discreta) -->
                     <div class="flex flex-wrap items-center gap-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl border border-gray-200">
-                        <select id="filter-status" onchange="state.filterStatus = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 font-bold outline-none">
+                        <select id="filter-status" onchange="state.filterStatus = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 font-bold outline-none admin-filter-input">
                             <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Status: Todos</option>
                             <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
                             <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
@@ -770,12 +916,21 @@
                         </select>
                         <div class="flex items-center gap-1">
                             <span class="text-[9px] font-bold text-gray-400 uppercase">De:</span>
-                            <input type="date" id="filter-date-start" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none">
+                            <input type="date" id="filter-date-start" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none admin-filter-input">
                         </div>
                         <div class="flex items-center gap-1">
                             <span class="text-[9px] font-bold text-gray-400 uppercase">Até:</span>
-                            <input type="date" id="filter-date-end" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none">
+                            <input type="date" id="filter-date-end" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="text-[10px] p-1 border rounded bg-white dark:bg-gray-600 outline-none admin-filter-input">
                         </div>
+                    </div>
+
+                    <!-- PAINEL DE RESUMO COM BADGES COLORIDOS -->
+                    <div class="flex flex-wrap gap-2 mb-4 animate-fade-in">
+                        <div class="bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Total: ${stats.total}</div>
+                        <div class="bg-red-100 text-red-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Aberto: ${stats.aberto}</div>
+                        <div class="bg-yellow-100 text-yellow-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Andamento: ${stats.andamento}</div>
+                        <div class="bg-green-100 text-green-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Solucionado: ${stats.solucionado}</div>
+                        <div class="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-xs font-bold shadow-sm">Fechado: ${stats.fechado}</div>
                     </div>
 
                     <div class="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
@@ -783,10 +938,9 @@
                             <div class="p-5 bg-gray-50 dark:bg-gray-700 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-sm relative group">
                                 <div class="flex flex-col gap-1 pr-16">
                                     <p class="font-bold text-gray-800 dark:text-gray-100 text-xl">${r.subject}</p>
-                                    ${r.processNumber ? `<p class="text-sm font-black text-primary">Proc: ${r.processNumber}</p>` : ''}
+                                    ${r.processNumber ? `<p class="text-sm font-black text-primary">Proc: ${r.processNumber} ${r.processDate ? '(' + new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')' : ''}</p>` : ''}
                                     <div class="text-[10px] flex gap-4 text-gray-500">
                                         <span>CONSEG: ${state.consegs.find(c => c.id === r.consegId)?.nome || 'S/ Ref'}</span>
-                                        ${r.processDate ? `<span>Data Proc: ${new Date(r.processDate).toLocaleDateString()}</span>` : ''}
                                     </div>
                                 </div>
                                 <div class="flex justify-between items-center pt-3 border-t mt-3 text-[10px] text-gray-400 italic">
@@ -795,6 +949,9 @@
                                 </div>
                                 ${valid ? `
                                 <div class="absolute top-4 right-4 flex flex-col gap-2">
+                                    ${r.latitude && r.longitude ? `
+                                        <button onclick="window.open('https://www.google.com/maps?q=${r.latitude},${r.longitude}', '_blank')" class="bg-emerald-500 text-white p-4 rounded-xl shadow hover:bg-emerald-600 transition-colors" title="Ver no Mapa">📍</button>
+                                    ` : ''}
                                     <button onclick="window.abrirEdicaoOuvidoria('${r.id}')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Ajustar Registro">✏️</button>
                                     <button onclick="handleDeleteOuvidoria('${r.id}')" class="bg-red-500 text-white p-4 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
                                 </div>
@@ -863,26 +1020,22 @@
 
         async function handleDeleteOuvidoria(id) {
             if (!confirm("Tem certeza que deseja excluir este registro permanentemente?")) return;
-            
-            state.loading = true; render();
+            state.registrations = state.registrations.filter(r => String(r.id) !== String(id));
+            render();
             try {
                 await fetch(DIRECT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({ type: 'delete_registration', payload: { id } })
                 });
-                alert("Registro excluído com sucesso!");
-                await fetchDataJSONP(true);
             } catch (e) {
-                alert("Erro ao excluir registro.");
-                state.loading = false;
-                render();
+                console.error("Erro ao excluir registro:", e);
+                fetchDataJSONP(true);
             }
         }
 
         async function handleSaveNewRegistration(event) {
-            if (event) event.preventDefault(); // Bloqueio do Refresh
-
+            if (event) event.preventDefault(); 
             const consegId = document.getElementById('form-conseg').value;
             const subject = document.getElementById('form-subject').value;
             const processNumber = document.getElementById('reg-processNumber').value;
@@ -894,12 +1047,54 @@
                 return;
             }
 
-            // Identificação da Operação (update_registration para edições)
+            // Tentar obter a localização antes de salvar
+            let latitude = "";
+            let longitude = "";
+
+            const getLocation = () => {
+                return new Promise((resolve) => {
+                    if (!navigator.geolocation) {
+                        console.warn("Geolocalização não suportada pelo navegador.");
+                        resolve(null);
+                        return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            resolve({
+                                lat: position.coords.latitude,
+                                lng: position.coords.longitude
+                            });
+                        },
+                        (error) => {
+                            console.warn("Erro ao obter localização:", error.message);
+                            resolve(null);
+                        },
+                        { timeout: 5000, enableHighAccuracy: true }
+                    );
+                });
+            };
+
+            // Mostra um feedback visual simples se demorar
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "Obtendo localização...";
+            btn.disabled = true;
+
+            const location = await getLocation();
+            
+            btn.innerText = originalText;
+            btn.disabled = false;
+
+            if (location) {
+                latitude = String(location.lat);
+                longitude = String(location.lng);
+            }
+
             const isUpdate = registroParaEditar !== null;
             const finalId = isUpdate ? registroParaEditar.id : String(Date.now());
 
             const payload = {
-                id: finalId, // Garante envio do ID original no update
+                id: finalId, 
                 userName: state.ouvidoriaUser,
                 userPassword: state.ouvidoriaPass,
                 consegId: consegId,
@@ -909,11 +1104,10 @@
                 status: status,
                 createdAt: isUpdate ? registroParaEditar.createdAt : new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                latitude: "", // Removido definitivamente GPS
-                longitude: ""
+                latitude: latitude, 
+                longitude: longitude
             };
 
-            // --- ATUALIZAÇÃO OTIMISTA (INSTANTÂNEA NA MEMÓRIA) ---
             if (isUpdate) {
                 const idx = state.registrations.findIndex(r => String(r.id) === String(finalId));
                 if (idx !== -1) {
@@ -923,55 +1117,237 @@
                 state.registrations.unshift(payload);
             }
 
-            // MUDANÇA DE TELA E RENDERIZAÇÃO IMEDIATA
             state.ouvidoriaView = 'list';
             registroParaEditar = null;
             state.ouvidoriaEditingId = null;
             resetOuvidoriaForm();
-            render(); // A lista reflete a mudança no exato momento do clique
+            render(); 
 
-            // --- SINCRONIZAÇÃO EM BACKGROUND (SEGUNDO PLANO) ---
             const type = isUpdate ? 'update_registration' : 'registration';
             fetch(DIRECT_URL, { 
                 method: 'POST', 
                 body: JSON.stringify({ type: type, payload: payload }) 
             })
-            .then(() => {
-                // Sincronização silenciosa opcional para garantir ordem/ids definitivos
-                fetchDataJSONP(true); 
-            })
-            .catch((err) => {
-                console.error("Erro no salvamento em background:", err);
-                alert("Erro ao gravar dados na nuvem. Verifique sua internet.");
-            });
+            .then(() => fetchDataJSONP(true))
+            .catch((err) => console.error("Erro no salvamento em background:", err));
         }
 
         function handleOuvidoriaLogin(view) { if (isOuvidoriaValid()) { state.ouvidoriaView = view; render(); fetchDataJSONP(); } }
 
+        function getStatusBadgeClass(status) {
+            const s = String(status).toLowerCase();
+            if (s === 'aberto' || s === 'pendente') return 'bg-yellow-400 text-black';
+            if (s === 'em andamento') return 'bg-blue-600 text-white';
+            if (s === 'solucionado') return 'bg-green-600 text-white';
+            if (s === 'fechado' || s === 'concluído') return 'bg-gray-500 text-white';
+            return 'bg-gray-200 text-gray-700';
+        }
+
         function renderAdminRegistros() {
-            const filtered = state.registrations.sort((a,b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-            if (filtered.length === 0) return `<p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado no sistema.</p>`;
-            return `<div class="grid grid-cols-1 gap-4 animate-fade-in">${filtered.map(r => `<div class="bg-white dark:bg-gray-700 p-5 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-md transition-all duration-300"><p class="font-extrabold text-lg text-primary dark:text-blue-400">Proc: ${r.processNumber || 'S/ Nº'}</p><p class="font-extrabold text-gray-800 dark:text-gray-100">${r.userName}</p><p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">${r.subject}</p><div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic"><span>📅 ${new Date(r.createdAt).toLocaleDateString()}</span><span>🔄 ${new Date(r.updatedAt || r.createdAt).toLocaleDateString()}</span></div></div>`).join('')}</div>`;
+            if (state.loading) {
+                return `
+                    <div class="flex flex-col items-center justify-center py-20 space-y-4 animate-pulse">
+                        <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-lg font-bold text-gray-500 uppercase tracking-widest">Carregando registros...</p>
+                        <p class="text-xs text-gray-400">Isso pode levar alguns segundos...</p>
+                    </div>
+                `;
+            }
+
+            if (state.fetchError && state.registrations.length === 0) {
+                return `
+                    <div class="bg-red-50 border-2 border-red-200 p-8 rounded-2xl text-center space-y-4">
+                        <p class="text-red-600 font-bold text-lg">⚠️ Erro ao carregar dados</p>
+                        <p class="text-sm text-red-500">Não foi possível conectar ao servidor do Google. Verifique sua conexão ou tente novamente.</p>
+                        <button onclick="fetchDataJSONP(true)" class="bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg">Tentar Novamente</button>
+                    </div>
+                `;
+            }
+
+            let filtered = [...state.registrations];
+            if (state.filterStatus && state.filterStatus !== 'Todos') {
+                filtered = filtered.filter(r => r.status === state.filterStatus);
+            }
+            if (state.filterConseg) {
+                filtered = filtered.filter(r => String(r.consegId) === String(state.filterConseg));
+            }
+            if (state.filterPeriodStart) {
+                const start = new Date(state.filterPeriodStart + 'T00:00:00').getTime();
+                filtered = filtered.filter(r => new Date(r.createdAt).setHours(0,0,0,0) >= start);
+            }
+            if (state.filterPeriodEnd) {
+                const end = new Date(state.filterPeriodEnd + 'T23:59:59').getTime();
+                filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
+            }
+
+            filtered.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+            window.ultimosRegistros = filtered;
+            const filteredIds = filtered.map(r => String(r.id));
+
+            // --- LÓGICA DE CÁLCULO DO RESUMO DE STATUS PARA O ADMIN ---
+            const stats = {
+                total: filtered.length,
+                aberto: filtered.filter(r => r.status === 'Aberto').length,
+                andamento: filtered.filter(r => r.status === 'Em andamento').length,
+                solucionado: filtered.filter(r => r.status === 'Solucionado').length,
+                fechado: filtered.filter(r => r.status === 'Fechado').length
+            };
+
+            if (filtered.length === 0) return `
+                <div class="space-y-4">
+                    <!-- PAINEL DE RESUMO COM BADGES COLORIDOS -->
+                    <div class="flex flex-wrap gap-2 mb-2 animate-fade-in">
+                        <div class="bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Total: ${stats.total}</div>
+                        <div class="bg-red-100 text-red-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Aberto: ${stats.aberto}</div>
+                        <div class="bg-yellow-100 text-yellow-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Andamento: ${stats.andamento}</div>
+                        <div class="bg-green-100 text-green-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Solucionado: ${stats.solucionado}</div>
+                        <div class="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Fechado: ${stats.fechado}</div>
+                    </div>
+                    <p class="bg-blue-100 text-blue-800 p-2 rounded-lg text-center font-bold text-xs uppercase tracking-wide">Total: 0 registros encontrados</p>
+                    <p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado no sistema.</p>
+                </div>`;
+
+            return `
+                <div class="space-y-4 animate-fade-in">
+                    <!-- PAINEL DE RESUMO COM BADGES COLORIDOS -->
+                    <div class="flex flex-wrap gap-2 mb-2 animate-fade-in">
+                        <div class="bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Total: ${stats.total}</div>
+                        <div class="bg-red-100 text-red-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Aberto: ${stats.aberto}</div>
+                        <div class="bg-yellow-100 text-yellow-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Andamento: ${stats.andamento}</div>
+                        <div class="bg-green-100 text-green-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Solucionado: ${stats.solucionado}</div>
+                        <div class="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-[10px] font-bold shadow-sm">Fechado: ${stats.fechado}</div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <p class="bg-blue-100 text-blue-800 p-2 rounded-lg text-center font-bold text-xs uppercase tracking-wide flex-1 w-full">Total: ${filtered.length} registros encontrados</p>
+                        <button onclick="window.handleDeleteAdminFiltered('${filteredIds.join(',')}')" class="w-full sm:w-auto bg-red-600 text-white px-4 py-2 rounded-lg font-bold text-xs uppercase hover:bg-red-700 shadow transition-all admin-filter-input flex items-center justify-center gap-2">
+                            🗑️ Excluir todos os ${filtered.length} registros filtrados
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4">
+                        ${filtered.map(r => {
+                            try {
+                                return `
+                                    <div class="bg-white dark:bg-gray-700 p-5 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-md transition-all duration-300 relative">
+                                        <div class="flex flex-col gap-1 pr-14">
+                                            <div class="flex flex-wrap items-center gap-2 mb-1">
+                                                <span class="${getStatusBadgeClass(r.status)} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">${r.status}</span>
+                                                ${r.processNumber ? `
+                                                    <span class="font-extrabold text-sm text-primary dark:text-blue-400">
+                                                        Proc: ${r.processNumber} ${r.processDate ? '(' + new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')' : ''}
+                                                    </span>
+                                                ` : ''}
+                                            </div>
+                                            <p class="font-extrabold text-gray-800 dark:text-gray-100 text-base">${r.userName || 'Usuário'} <span class="text-[10px] text-gray-400 font-normal">(${state.consegs.find(c => String(c.id) === String(r.consegId))?.nome || 'Sem CONSEG'})</span></p>
+                                            <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2 leading-tight">${r.subject || 'Sem assunto'}</p>
+                                        </div>
+                                        <div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic">
+                                            <span>📅 Registro: ${r.createdAt ? new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'Data desconhecida'}</span>
+                                            <span class="font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">ID: ${r.id ? String(r.id).slice(-6) : 'N/A'}</span>
+                                        </div>
+                                        <div class="absolute top-4 right-4 flex flex-col gap-2">
+                                            ${r.latitude && r.longitude ? `
+                                                <button onclick="window.open('https://www.google.com/maps?q=${r.latitude},${r.longitude}', '_blank')" class="bg-emerald-500 text-white p-4 rounded-xl shadow hover:bg-emerald-600 transition-colors" title="Ver no Mapa">📍</button>
+                                            ` : ''}
+                                            <button onclick="window.abrirEdicaoOuvidoria('${r.id}')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Editar / Detalhes">✏️</button>
+                                            <button onclick="window.handleDeleteAdminIndividual('${r.id}')" class="bg-red-500 text-white p-4 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
+                                        </div>
+                                    </div>
+                                `;
+                            } catch (e) {
+                                console.error("Erro ao renderizar registro:", e, r);
+                                return "";
+                            }
+                        }).join('')}
+                    </div>
+                </div>`;
         }
 
         function getStatusBorderClass(status) { if (status === 'Pendente' || status === 'Aberto') return 'status-border-pendente'; if (status === 'Em andamento' || status === 'Em Andamento') return 'status-border-andamento'; if (status === 'Concluído' || status === 'Solucionado' || status === 'Fechado') return 'status-border-concluido'; return 'border-gray-300'; }
 
-        // INICIALIZAÇÃO
+        window.handleDeleteAdminIndividual = async function(id) {
+            if (!confirm('Deseja realmente excluir este registro?')) return;
+            state.registrations = state.registrations.filter(r => String(r.id) !== String(id));
+            render();
+            try {
+                await fetch(DIRECT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({ type: 'delete_registration', payload: { id: id } })
+                });
+            } catch (e) {
+                console.error(e);
+                fetchDataJSONP(true);
+            }
+        };
+
+        window.handleDeleteAdminFiltered = async function(idsString) {
+            const ids = idsString.split(',');
+            if (ids.length === 0 || ids[0] === "") return;
+            if (!confirm(`VOCÊ ESTÁ PRESTES A EXCLUIR TODOS OS ${ids.length} REGISTROS FILTRADOS. Confirma?`)) return;
+            if (!confirm(`ESSA AÇÃO É IRREVERSÍVEL. Confirmar exclusão em massa?`)) return;
+            state.registrations = state.registrations.filter(r => !ids.includes(String(r.id)));
+            render();
+            for (const id of ids) {
+                try {
+                    fetch(DIRECT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        body: JSON.stringify({ type: 'delete_registration', payload: { id: id } })
+                    });
+                } catch (e) {}
+            }
+            setTimeout(() => fetchDataJSONP(true), 1000);
+        };
+
         setInterval(() => { state.currentTime = new Date(); if (state.screen === 'home') render(); }, 60000);
         setInterval(() => fetchDataJSONP(), 120000);
         fetchAppVersion();
         fetchDataJSONP(); render();
 
-        // --- FUNÇÃO EDITAR ISOLADA E GLOBAL PARA MOBILE ---
+        window.showRegistrationDetails = function(id) {
+            const r = state.registrations.find(reg => String(reg.id) === String(id));
+            if (r) {
+                alert(`DETALHES DO REGISTRO\n\nStatus: ${r.status}\nData: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nUsuário: ${r.userName}\nAssunto: ${r.subject}\n\nProcesso: ${r.processNumber || 'N/A'}`);
+            }
+        };
+
+        window.handlePresidentUpdateStatus = async function(id, newStatus) {
+            const reg = state.registrations.find(r => String(r.id) === String(id));
+            if (!reg) return;
+            
+            const oldStatus = reg.status;
+            reg.status = newStatus;
+            reg.updatedAt = new Date().toISOString();
+            render();
+            
+            try {
+                const response = await fetch(DIRECT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        type: 'update_registration', 
+                        payload: reg 
+                    })
+                });
+                // Como é no-cors ou similar, podemos não ter resposta legível, mas o comando foi enviado.
+            } catch (e) {
+                console.error("Erro ao atualizar status pelo presidente:", e);
+                alert("Erro ao sincronizar alteração. Tentando recuperar...");
+                fetchDataJSONP(true);
+            }
+        };
+
         window.abrirEdicaoOuvidoria = function(id) {
-          const reg = window.ultimosRegistros.find(r => String(r.id) === String(id));
+          const reg = state.registrations.find(r => String(r.id) === String(id));
           if (!reg) return;
           registroParaEditar = reg; 
-          
           state.ouvidoriaView = 'form';
           state.ouvidoriaEditingId = id; 
+          if (state.screen === 'admin') {
+              state.ouvidoriaUser = reg.userName;
+              state.ouvidoriaPass = reg.userPassword;
+          }
           render();
-
           let tentativas = 0;
           const checkExist = setInterval(function() {
             const campoAssunto = document.getElementById('form-subject');
@@ -981,17 +1357,14 @@
               const procDate = document.getElementById('reg-processDate');
               const statusField = document.getElementById('reg-status');
               const consegField = document.getElementById('form-conseg');
-
               if (procNum) procNum.value = reg.processNumber || '';
               if (procDate) procDate.value = reg.processDate || '';
               if (statusField) statusField.value = reg.status || 'Aberto';
               if (consegField) consegField.value = reg.consegId || '';
-              
               if(reg.processNumber) {
                   const container = document.getElementById('reg-date-container');
                   if (container) container.style.display = 'block';
               }
-              
               clearInterval(checkExist);
             }
             if (++tentativas > 20) clearInterval(checkExist);
