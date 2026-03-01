@@ -26,7 +26,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
         body { font-family: 'Inter', sans-serif; }
         .elderly-text { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; }
-        input, select, textarea { font-size: 1.25rem !important; font-weight: 600 !important; }
+        input:not(.no-elderly), select:not(.no-elderly), textarea:not(.no-elderly) { font-size: 1.25rem !important; font-weight: 600 !important; }
         button { transition: all 0.2s; }
         button:active { transform: scale(0.95); }
         .scroll-hidden::-webkit-scrollbar { display: none; }
@@ -399,7 +399,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
-                            <select onchange="state.filterStatus = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                            <select onchange="state.filterStatus = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                                 <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Todos</option>
                                 <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
                                 <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
@@ -409,18 +409,18 @@
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">CONSEG</label>
-                            <select onchange="state.filterConseg = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                            <select onchange="state.filterConseg = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                                 <option value="">Todos os CONSEGs</option>
                                 ${state.consegs.map(c => `<option value="${c.id}" ${String(state.filterConseg) === String(c.id) ? 'selected' : ''}>${c.nome}</option>`).join('')}
                             </select>
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Período De</label>
-                            <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                            <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Período Até</label>
-                            <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                            <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                         </div>
                     </div>
                 </div>
@@ -484,7 +484,7 @@
                             </div>
                             <div class="md:col-span-2 space-y-1">
                                 <label class="text-xs font-bold text-gray-400 uppercase">Situação (Ativo no App)</label>
-                                <select id="edit-ativo" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold focus:ring-2 ring-primary outline-none">
+                                <select id="edit-ativo" class="w-full p-4 border rounded-xl dark:bg-gray-700 font-bold focus:ring-2 ring-primary outline-none no-elderly">
                                     <option value="true" ${c.ativo ? 'selected' : ''}>Sim (Ativo)</option>
                                     <option value="false" ${!c.ativo ? 'selected' : ''}>Não (Inativo)</option>
                                 </select>
@@ -641,7 +641,7 @@
                         <div class="flex flex-wrap items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-gray-200">
                             <div class="flex flex-col gap-1">
                                 <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
-                                <select onchange="state.filterStatus = this.value; render();" class="p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input">
+                                <select onchange="state.filterStatus = this.value; render();" class="p-2 border rounded-lg font-bold text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                                     <option value="Todos" ${state.filterStatus === 'Todos' ? 'selected' : ''}>Todos os Status</option>
                                     <option value="Aberto" ${state.filterStatus === 'Aberto' ? 'selected' : ''}>Aberto</option>
                                     <option value="Em andamento" ${state.filterStatus === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
@@ -651,11 +651,11 @@
                             </div>
                             <div class="flex flex-col gap-1">
                                 <label class="text-[10px] font-bold text-gray-500 uppercase">Desde</label>
-                                <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                                <input type="date" value="${state.filterPeriodStart}" onchange="state.filterPeriodStart = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                             </div>
                             <div class="flex flex-col gap-1">
                                 <label class="text-[10px] font-bold text-gray-500 uppercase">Até</label>
-                                <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input">
+                                <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                             </div>
                         </div>
 
@@ -680,12 +680,15 @@
                                         
                                         <div class="mt-2 flex items-center gap-2">
                                             <label class="text-[10px] font-bold text-gray-400 uppercase">Alterar Status:</label>
-                                            <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[10px] font-bold dark:bg-gray-600 outline-none">
+                                            <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[7px] font-bold dark:bg-gray-600 outline-none no-elderly">
                                                 <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
                                                 <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
                                                 <option value="Solucionado" ${r.status === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
                                                 <option value="Fechado" ${r.status === 'Fechado' ? 'selected' : ''}>Fechado</option>
                                             </select>
+                                            <button onclick="alert('📝 Assunto Completo:\\n\\n${ (r.subject || 'Sem assunto').replace(/'/g, "\\'").replace(/\n/g, "\\n") }')" class="bg-amber-100 text-amber-700 px-2 py-1 rounded text-[10px] font-bold hover:bg-amber-200 transition-colors" title="Ver Assunto Completo">
+                                                👁️ Ver Assunto
+                                            </button>
                                         </div>
                                     </div>
                                     <div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic">
@@ -1307,7 +1310,7 @@
                                                     </button>
                                                 </td>
                                                 <td class="p-3 border">
-                                                    <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[8px] font-bold dark:bg-gray-600 outline-none w-full">
+                                                    <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[6px] font-bold dark:bg-gray-600 outline-none w-full no-elderly">
                                                         <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>ABERTO</option>
                                                         <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>EM ANDAMENTO</option>
                                                         <option value="Solucionado" ${r.status === 'Solucionado' ? 'selected' : ''}>SOLUCIONADO</option>
@@ -1316,6 +1319,7 @@
                                                 </td>
                                                 <td class="p-3 border">
                                                     <div class="flex gap-2">
+                                                        <button onclick="alert('📝 Assunto Completo:\\n\\n${ (r.subject || 'Sem assunto').replace(/'/g, "\\'").replace(/\n/g, "\\n") }')" class="bg-amber-100 text-amber-700 p-2 rounded-lg shadow hover:bg-amber-200 transition-colors" title="Ver Assunto Completo">👁️</button>
                                                         <button onclick="window.handleDeleteAdminIndividual('${r.id}')" class="bg-red-500 text-white p-2 rounded-lg shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
                                                     </div>
                                                 </td>
