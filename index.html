@@ -140,9 +140,16 @@
 
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => triggerAlert(`${pos.coords.latitude},${pos.coords.longitude}`),
+                    (pos) => {
+                        // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
+                        // Formatação Técnica: Trate as coordenadas como números de ponto flutuante.
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        // Protocolo de Saída: Sempre exiba no formato Lat: [valor], Long: [valor]
+                        triggerAlert(`Lat: ${lat}, Long: ${lng}`);
+                    },
                     () => triggerAlert('Localização negada/indisponível'),
-                    { timeout: 10000, enableHighAccuracy: true }
+                    { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
                 );
             } else {
                 triggerAlert('Geolocalização não suportada');
@@ -236,7 +243,8 @@
                     createdAt: r.createdat || r.createdAt || new Date().toISOString(),
                     updatedAt: r.updatedat || r.updatedAt || r.createdAt || r.createdat || new Date().toISOString(),
                     latitude: r.latitude || null,
-                    longitude: r.longitude || null
+                    longitude: r.longitude || null,
+                    address: r.address || r.adress || ''
                 }));
                 state.registrations = regs;
                 window.ultimosRegistros = regs; 
@@ -247,6 +255,7 @@
             state.screen = scr; 
             state.adminEditingConseg = null; 
             state.presidentView = 'login'; 
+            state.filterStatus = 'Todos'; // Resetar filtros ao trocar de tela principal
             render(); 
         }
 
@@ -542,6 +551,7 @@
                 state.currentUser = c;
                 state.presidentView = 'dashboard';
                 state.presidentAttempts = 0; 
+                state.filterStatus = 'Aberto'; // Filtrar imediatamente por 'Aberto'
                 render();
             } else {
                 state.presidentAttempts++;
@@ -558,29 +568,35 @@
             if (!c) return `<p class='text-center'>Erro ao carregar dados.</p>`;
 
             // Filtragem dos registros do CONSEG do presidente
-            let filtered = state.registrations.filter(r => String(r.consegId) === String(c.id));
+            let allConsegRegistrations = state.registrations.filter(r => String(r.consegId) === String(c.id));
             
-            if (state.filterStatus && state.filterStatus !== 'Todos') {
-                filtered = filtered.filter(r => r.status === state.filterStatus);
-            }
+            // Aplicar filtros de período antes das estatísticas (opcional, mas geralmente desejado)
+            let periodFiltered = [...allConsegRegistrations];
             if (state.filterPeriodStart) {
                 const start = new Date(state.filterPeriodStart + 'T00:00:00').getTime();
-                filtered = filtered.filter(r => new Date(r.createdAt).setHours(0,0,0,0) >= start);
+                periodFiltered = periodFiltered.filter(r => new Date(r.createdAt).setHours(0,0,0,0) >= start);
             }
             if (state.filterPeriodEnd) {
                 const end = new Date(state.filterPeriodEnd + 'T23:59:59').getTime();
-                filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
+                periodFiltered = periodFiltered.filter(r => new Date(r.createdAt).getTime() <= end);
+            }
+
+            // Estatísticas baseadas no período filtrado (ou em todos se sem período)
+            const stats = {
+                total: periodFiltered.length,
+                aberto: periodFiltered.filter(r => r.status === 'Aberto').length,
+                andamento: periodFiltered.filter(r => r.status === 'Em andamento').length,
+                solucionado: periodFiltered.filter(r => r.status === 'Solucionado').length,
+                fechado: periodFiltered.filter(r => r.status === 'Fechado').length
+            };
+
+            // Agora aplicar o filtro de status para a LISTA exibida
+            let filtered = [...periodFiltered];
+            if (state.filterStatus && state.filterStatus !== 'Todos') {
+                filtered = filtered.filter(r => r.status === state.filterStatus);
             }
 
             filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-            const stats = {
-                total: filtered.length,
-                aberto: filtered.filter(r => r.status === 'Aberto').length,
-                andamento: filtered.filter(r => r.status === 'Em andamento').length,
-                solucionado: filtered.filter(r => r.status === 'Solucionado').length,
-                fechado: filtered.filter(r => r.status === 'Fechado').length
-            };
 
             return `
                 <div class="space-y-8 animate-fade-in">
@@ -664,7 +680,7 @@
                                         
                                         <div class="mt-2 flex items-center gap-2">
                                             <label class="text-[10px] font-bold text-gray-400 uppercase">Alterar Status:</label>
-                                            <select onchange="window.handlePresidentUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[10px] font-bold dark:bg-gray-600 outline-none">
+                                            <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[10px] font-bold dark:bg-gray-600 outline-none">
                                                 <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>Aberto</option>
                                                 <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>Em andamento</option>
                                                 <option value="Solucionado" ${r.status === 'Solucionado' ? 'selected' : ''}>Solucionado</option>
@@ -949,9 +965,6 @@
                                 </div>
                                 ${valid ? `
                                 <div class="absolute top-4 right-4 flex flex-col gap-2">
-                                    ${r.latitude && r.longitude ? `
-                                        <button onclick="window.open('https://www.google.com/maps?q=${r.latitude},${r.longitude}', '_blank')" class="bg-emerald-500 text-white p-4 rounded-xl shadow hover:bg-emerald-600 transition-colors" title="Ver no Mapa">📍</button>
-                                    ` : ''}
                                     <button onclick="window.abrirEdicaoOuvidoria('${r.id}')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Ajustar Registro">✏️</button>
                                     <button onclick="handleDeleteOuvidoria('${r.id}')" class="bg-red-500 text-white p-4 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
                                 </div>
@@ -1003,6 +1016,10 @@
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Assunto / Descrição</label>
                             <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${registroParaEditar ? registroParaEditar.subject : ''}</textarea>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Endereço (Origem)</label>
+                            <input type="text" id="form-address" placeholder="Rua, Número, Bairro..." value="${registroParaEditar ? (registroParaEditar.address || registroParaEditar.adress || '') : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
+                        </div>
                         <button onclick="handleSaveNewRegistration(event)" class="w-full p-5 bg-green-600 text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">Salvar Registro</button>
                         <button onclick="state.ouvidoriaView = 'list'; registroParaEditar = null; state.ouvidoriaEditingId = null; render();" class="w-full p-4 bg-gray-500 text-white rounded-xl font-bold">Cancelar</button>
                     </div>
@@ -1047,51 +1064,82 @@
                 return;
             }
 
-            // Tentar obter a localização antes de salvar
-            let latitude = "";
-            let longitude = "";
-
-            const getLocation = () => {
-                return new Promise((resolve) => {
-                    if (!navigator.geolocation) {
-                        console.warn("Geolocalização não suportada pelo navegador.");
-                        resolve(null);
-                        return;
-                    }
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            resolve({
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude
-                            });
-                        },
-                        (error) => {
-                            console.warn("Erro ao obter localização:", error.message);
-                            resolve(null);
-                        },
-                        { timeout: 5000, enableHighAccuracy: true }
-                    );
-                });
-            };
-
-            // Mostra um feedback visual simples se demorar
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = "Obtendo localização...";
-            btn.disabled = true;
-
-            const location = await getLocation();
-            
-            btn.innerText = originalText;
-            btn.disabled = false;
-
-            if (location) {
-                latitude = String(location.lat);
-                longitude = String(location.lng);
-            }
-
             const isUpdate = registroParaEditar !== null;
             const finalId = isUpdate ? registroParaEditar.id : String(Date.now());
+
+            // Tentar obter a localização antes de salvar (apenas para novos registros)
+            let latitude = "";
+            let longitude = "";
+            let address = document.getElementById('form-address') ? document.getElementById('form-address').value : "Endereço não identificado";
+
+            if (!isUpdate) {
+                const getLocation = () => {
+                    return new Promise((resolve) => {
+                        if (!navigator.geolocation) {
+                            console.warn("Geolocalização não suportada pelo navegador.");
+                            resolve(null);
+                            return;
+                        }
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                // Sistema de registro geoespacial de alta precisão.
+                                // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
+                                // Formatação Técnica: Trate as coordenadas como números de ponto flutuante ($float64$).
+                                const lat = position.coords.latitude;
+                                const lng = position.coords.longitude;
+                                
+                                resolve({
+                                    lat: lat,
+                                    lng: lng
+                                });
+                            },
+                            (error) => {
+                                console.warn("Erro ao obter localização precisa:", error.message);
+                                resolve(null);
+                            },
+                            { 
+                                timeout: 15000, 
+                                enableHighAccuracy: true, 
+                                maximumAge: 0 
+                            }
+                        );
+                    });
+                };
+
+                // Mostra um feedback visual simples se demorar
+                const btn = event.target;
+                const originalText = btn.innerText;
+                btn.innerText = "Obtendo localização...";
+                btn.disabled = true;
+
+                const location = await getLocation();
+                
+                if (location) {
+                    // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
+                    // Protocolo de Saída: Sempre exiba e armazene a localização no formato: Lat: [valor], Long: [valor]
+                    latitude = String(location.lat);
+                    longitude = String(location.lng);
+
+                    // Reverse Geocoding before saving
+                    try {
+                        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+                        const geoData = await geoRes.json();
+                        if (geoData && geoData.address) {
+                            const road = geoData.address.road || "";
+                            const houseNumber = geoData.address.house_number || "S/N";
+                            const city = geoData.address.city || geoData.address.town || geoData.address.village || "Joinville";
+                            const state = geoData.address.state || "SC";
+                            // Protocolo Estrito: Endereço textual completo
+                            address = `${road}, ${houseNumber}, ${city} - ${state}`;
+                        }
+                    } catch (e) {
+                        console.error("Erro no reverse geocoding:", e);
+                    }
+                }
+
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
 
             const payload = {
                 id: finalId, 
@@ -1104,8 +1152,7 @@
                 status: status,
                 createdAt: isUpdate ? registroParaEditar.createdAt : new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                latitude: latitude, 
-                longitude: longitude
+                address: address // Protocolo Estrito: address conforme solicitado
             };
 
             if (isUpdate) {
@@ -1118,6 +1165,7 @@
             }
 
             state.ouvidoriaView = 'list';
+            
             registroParaEditar = null;
             state.ouvidoriaEditingId = null;
             resetOuvidoriaForm();
@@ -1224,41 +1272,62 @@
                             🗑️ Excluir todos os ${filtered.length} registros filtrados
                         </button>
                     </div>
-                    <div class="grid grid-cols-1 gap-4">
-                        ${filtered.map(r => {
-                            try {
-                                return `
-                                    <div class="bg-white dark:bg-gray-700 p-5 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-md transition-all duration-300 relative">
-                                        <div class="flex flex-col gap-1 pr-14">
-                                            <div class="flex flex-wrap items-center gap-2 mb-1">
-                                                <span class="${getStatusBadgeClass(r.status)} px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight">${r.status}</span>
-                                                ${r.processNumber ? `
-                                                    <span class="font-extrabold text-sm text-primary dark:text-blue-400">
-                                                        Proc: ${r.processNumber} ${r.processDate ? '(' + new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')' : ''}
-                                                    </span>
-                                                ` : ''}
-                                            </div>
-                                            <p class="font-extrabold text-gray-800 dark:text-gray-100 text-base">${r.userName || 'Usuário'} <span class="text-[10px] text-gray-400 font-normal">(${state.consegs.find(c => String(c.id) === String(r.consegId))?.nome || 'Sem CONSEG'})</span></p>
-                                            <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2 leading-tight">${r.subject || 'Sem assunto'}</p>
-                                        </div>
-                                        <div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic">
-                                            <span>📅 Registro: ${r.createdAt ? new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : 'Data desconhecida'}</span>
-                                            <span class="font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded">ID: ${r.id ? String(r.id).slice(-6) : 'N/A'}</span>
-                                        </div>
-                                        <div class="absolute top-4 right-4 flex flex-col gap-2">
-                                            ${r.latitude && r.longitude ? `
-                                                <button onclick="window.open('https://www.google.com/maps?q=${r.latitude},${r.longitude}', '_blank')" class="bg-emerald-500 text-white p-4 rounded-xl shadow hover:bg-emerald-600 transition-colors" title="Ver no Mapa">📍</button>
-                                            ` : ''}
-                                            <button onclick="window.abrirEdicaoOuvidoria('${r.id}')" class="bg-blue-500 text-white p-4 rounded-xl shadow hover:bg-blue-600 transition-colors" title="Editar / Detalhes">✏️</button>
-                                            <button onclick="window.handleDeleteAdminIndividual('${r.id}')" class="bg-red-500 text-white p-4 rounded-xl shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
-                                        </div>
-                                    </div>
-                                `;
-                            } catch (e) {
-                                console.error("Erro ao renderizar registro:", e, r);
-                                return "";
-                            }
-                        }).join('')}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left border-collapse bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-md">
+                            <thead class="bg-gray-100 dark:bg-gray-700">
+                                <tr>
+                                    <th class="p-3 border font-bold">Data</th>
+                                    <th class="p-3 border font-bold">Nome</th>
+                                    <th class="p-3 border font-bold">Assunto</th>
+                                    <th class="p-3 border font-bold">Endereço</th>
+                                    <th class="p-3 border font-bold">Status</th>
+                                    <th class="p-3 border font-bold">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${filtered.map(r => {
+                                    try {
+                                        return `
+                                            <tr class="border-b hover:bg-gray-50 dark:hover:bg-gray-750">
+                                                <td class="p-3 border">
+                                                    <div class="font-bold">${new Date(r.createdAt).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</div>
+                                                    <div class="text-[10px] text-gray-400 italic">ID: ${String(r.id).slice(-6)}</div>
+                                                </td>
+                                                <td class="p-3 border">
+                                                    <div class="font-bold">${r.userName || 'Usuário'}</div>
+                                                    <div class="text-[10px] text-gray-400">(${state.consegs.find(c => String(c.id) === String(r.consegId))?.nome || 'Sem CONSEG'})</div>
+                                                </td>
+                                                <td class="p-3 border">
+                                                    <div class="line-clamp-2">${r.subject || 'Sem assunto'}</div>
+                                                    ${r.processNumber ? `<div class="text-[10px] font-bold text-primary">Proc: ${r.processNumber}</div>` : ''}
+                                                </td>
+                                                <td class="p-3 border">
+                                                    <button onclick="alert('📍 Endereço: ${ (r.address || r.adress || 'Não informado').replace(/'/g, "\\'") }')" class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold hover:bg-emerald-200 transition-colors">
+                                                        📍 Ver Endereço
+                                                    </button>
+                                                </td>
+                                                <td class="p-3 border">
+                                                    <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[8px] font-bold dark:bg-gray-600 outline-none w-full">
+                                                        <option value="Aberto" ${r.status === 'Aberto' ? 'selected' : ''}>ABERTO</option>
+                                                        <option value="Em andamento" ${r.status === 'Em andamento' ? 'selected' : ''}>EM ANDAMENTO</option>
+                                                        <option value="Solucionado" ${r.status === 'Solucionado' ? 'selected' : ''}>SOLUCIONADO</option>
+                                                        <option value="Fechado" ${r.status === 'Fechado' ? 'selected' : ''}>FECHADO</option>
+                                                    </select>
+                                                </td>
+                                                <td class="p-3 border">
+                                                    <div class="flex gap-2">
+                                                        <button onclick="window.handleDeleteAdminIndividual('${r.id}')" class="bg-red-500 text-white p-2 rounded-lg shadow hover:bg-red-600 transition-colors" title="Excluir">🗑️</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    } catch (e) {
+                                        console.error("Erro ao renderizar registro:", e, r);
+                                        return "";
+                                    }
+                                }).join('')}
+                            </tbody>
+                        </table>
                     </div>
                 </div>`;
         }
@@ -1312,7 +1381,7 @@
             }
         };
 
-        window.handlePresidentUpdateStatus = async function(id, newStatus) {
+        window.handleUpdateStatus = async function(id, newStatus) {
             const reg = state.registrations.find(r => String(r.id) === String(id));
             if (!reg) return;
             
@@ -1331,7 +1400,7 @@
                 });
                 // Como é no-cors ou similar, podemos não ter resposta legível, mas o comando foi enviado.
             } catch (e) {
-                console.error("Erro ao atualizar status pelo presidente:", e);
+                console.error("Erro ao atualizar status:", e);
                 alert("Erro ao sincronizar alteração. Tentando recuperar...");
                 fetchDataJSONP(true);
             }
@@ -1357,10 +1426,12 @@
               const procDate = document.getElementById('reg-processDate');
               const statusField = document.getElementById('reg-status');
               const consegField = document.getElementById('form-conseg');
+              const addressField = document.getElementById('form-address');
               if (procNum) procNum.value = reg.processNumber || '';
               if (procDate) procDate.value = reg.processDate || '';
               if (statusField) statusField.value = reg.status || 'Aberto';
               if (consegField) consegField.value = reg.consegId || '';
+              if (addressField) addressField.value = reg.address || reg.adress || '';
               if(reg.processNumber) {
                   const container = document.getElementById('reg-date-container');
                   if (container) container.style.display = 'block';
