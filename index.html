@@ -132,10 +132,34 @@
             return String(11 - remainder);
         }
 
+        window.handleProcessNumberKeydown = function(event) {
+            const el = event.target;
+            if (event.key === 'Backspace') {
+                const pos = el.selectionStart;
+                const val = el.value;
+                // Se o cursor está logo após um separador, sinaliza para o oninput
+                if (pos > 0 && (val[pos-1] === '.' || val[pos-1] === '-')) {
+                    el.dataset.deleteSeparator = "true";
+                } else {
+                    el.dataset.deleteSeparator = "false";
+                }
+            }
+        };
+
         window.handleProcessNumberInput = function(el, event) {
-            const inputType = event ? event.inputType : '';
             let cursor = el.selectionStart;
-            let v = el.value.replace(/\D/g, '').substring(0, 10);
+            let val = el.value;
+            
+            let v = val.replace(/\D/g, '').substring(0, 10);
+            
+            // Se detectamos que o usuário apagou um separador, removemos o dígito anterior também
+            if (el.dataset.deleteSeparator === "true") {
+                v = v.substring(0, v.length - 1);
+                el.dataset.deleteSeparator = "false";
+            }
+
+            // Técnica robusta para mobile: contar dígitos antes do cursor
+            let digitsBefore = val.substring(0, cursor).replace(/\D/g, '').length;
             
             let r = '';
             if (v.length > 0) r += v.slice(0, 2);
@@ -145,13 +169,22 @@
             
             el.value = r;
             
-            // Ajuste do cursor para evitar pulos e permitir backspace
-            if (inputType && !inputType.includes('delete')) {
-                if (r.length > cursor && (r[cursor-1] === '.' || r[cursor-1] === '-')) {
-                    cursor++;
+            // Reposicionar cursor baseado na contagem de dígitos
+            let newPos = 0;
+            let count = 0;
+            while (count < digitsBefore && newPos < r.length) {
+                if (/\d/.test(r[newPos])) count++;
+                newPos++;
+            }
+            
+            // Se acabou de digitar um número que precede um ponto/traço, pula o separador
+            if (event && !event.inputType?.includes('delete')) {
+                if (newPos < r.length && /\D/.test(r[newPos])) {
+                    newPos++;
                 }
             }
-            el.setSelectionRange(cursor, cursor);
+
+            el.setSelectionRange(newPos, newPos);
 
             const dateContainer = document.getElementById('reg-date-container');
             if (dateContainer) dateContainer.style.display = v.length > 0 ? 'block' : 'none';
@@ -1132,7 +1165,9 @@
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Processo</label>
-                            <input type="text" id="reg-processNumber" maxlength="13" value="${registroParaEditar ? registroParaEditar.processNumber : ''}"
+                            <input type="text" id="reg-processNumber" maxlength="13" inputmode="numeric" 
+                                value="${registroParaEditar ? registroParaEditar.processNumber : ''}"
+                                onkeydown="window.handleProcessNumberKeydown(event)"
                                 oninput="window.handleProcessNumberInput(this, event)" 
                                 placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                             <p id="reg-process-error" class="text-red-500 text-[10px] font-bold mt-1" style="display: none;"></p>
