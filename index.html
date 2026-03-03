@@ -64,6 +64,25 @@
         <!-- O conteúdo será injetado via React/DOM -->
     </div>
 
+    <!-- Modal para WhatsApp -->
+    <div id="whatsapp-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] hidden p-4">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl space-y-6 max-w-sm w-full animate-fade-in">
+            <h2 class="text-2xl font-bold text-primary dark:text-blue-400 uppercase text-center">Enviar WhatsApp</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Celular (11 dígitos)</label>
+                    <input type="text" id="wa-number" maxlength="11" placeholder="DDD9XXXXXXXX" 
+                        oninput="this.value = this.value.replace(/\D/g, '')"
+                        class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 text-center text-2xl">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="confirmWhatsApp()" class="bg-green-600 text-white p-4 rounded-xl font-bold text-lg">OK</button>
+                    <button onclick="closeWhatsAppModal()" class="bg-gray-500 text-white p-4 rounded-xl font-bold text-lg">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // --- TÉCNICA JSONP GLOBAL ---
         let registroParaEditar = null; // Variável de Suporte
@@ -84,6 +103,61 @@
         // --- CONFIGURAÇÕES E CONSTANTES ---
         const DIRECT_URL = 'https://script.google.com/macros/s/AKfycbzn2NSn77z4nsNOyDSyfT5_YKBLimBdN4X1oVa0MSxJbpqIjFrCuJ4rwhpiRSyBrE1l/exec';
         let appVersionStr = "Carregando...";
+
+        function calculateSEIDigit(base) {
+            const digits = base.replace(/\D/g, '');
+            if (digits.length < 9) return "";
+            let sum = 0;
+            const weights = [2, 3, 4, 5, 6, 7, 8, 9];
+            const reversedDigits = digits.substring(0, 9).split('').reverse();
+            for (let i = 0; i < reversedDigits.length; i++) {
+                const weight = weights[i % weights.length];
+                sum += parseInt(reversedDigits[i]) * weight;
+            }
+            const remainder = sum % 11;
+            if (remainder < 2) return "0";
+            return String(11 - remainder);
+        }
+
+        function openGoogleMaps() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    window.open(`https://www.google.com/maps?q=${lat},${lng}`);
+                }, (err) => {
+                    alert("Erro ao obter localização: " + err.message);
+                });
+            } else {
+                alert("Geolocalização não é suportada por este navegador.");
+            }
+        }
+
+        function sendWhatsAppMessage() {
+            const el = document.getElementById('wa-number');
+            el.value = '';
+            document.getElementById('whatsapp-modal').classList.remove('hidden');
+            setTimeout(() => el.focus(), 100);
+        }
+
+        function closeWhatsAppModal() {
+            document.getElementById('whatsapp-modal').classList.add('hidden');
+        }
+
+        function confirmWhatsApp() {
+            const val = document.getElementById('wa-number').value;
+            const cleaned = val.replace(/\D/g, '');
+            if (!cleaned) {
+                alert("Por favor, informe o número do WhatsApp.");
+                return;
+            }
+            if (cleaned.length === 11) {
+                window.open(`https://api.whatsapp.com/send?phone=55${cleaned}`);
+                closeWhatsAppModal();
+            } else {
+                alert("Número incompleto! Por favor, informe os 11 dígitos (DDD + 9 + número).");
+            }
+        }
 
         // --- ESTADO GLOBAL DO APLICATIVO ---
         let state = {
@@ -320,7 +394,9 @@
                 { label: "Telefones de EMERGÊNCIA", color: "bg-rose-600", icon: "🚨", click: "setScreen('emergencia')" },
                 { label: "Telefones de SERVIÇOS", color: "bg-teal-600", icon: "🛠️", click: "setScreen('servicos')" },
                 { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
-                { label: "Inteligência Artificial ChatGPT", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" }
+                { label: "Inteligência Artificial ChatGPT", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" },
+                { label: "Descobrir minha Localização Aproximada", color: "bg-lime-600", icon: "📍", click: "openGoogleMaps()" },
+                { label: "Enviar mensagem para um número WhatsApp", color: "bg-green-500", icon: "💬", click: "sendWhatsAppMessage()" }
             ];
 
             return `
@@ -999,8 +1075,36 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Processo</label>
                             <input type="text" id="reg-processNumber" maxlength="13" value="${registroParaEditar ? registroParaEditar.processNumber : ''}"
-                                oninput="let v = this.value.replace(/\\D/g, '').substring(0,10); let r = ''; if (v.length > 0) r += v.slice(0, 2); if (v.length > 2) r += '.' + v.slice(2, 3); if (v.length > 3) r += '.' + v.slice(3, 9); if (v.length > 9) r += '-' + v.slice(9, 10); this.value = r; document.getElementById('reg-date-container').style.display = v.length > 0 ? 'block' : 'none';" 
+                                oninput="
+                                    let v = this.value.replace(/\D/g, '').substring(0,10); 
+                                    let r = ''; 
+                                    if (v.length > 0) r += v.slice(0, 2); 
+                                    if (v.length > 2) r += '.' + v.slice(2, 3); 
+                                    if (v.length > 3) r += '.' + v.slice(3, 9); 
+                                    if (v.length > 9) r += '-' + v.slice(9, 10); 
+                                    this.value = r; 
+                                    document.getElementById('reg-date-container').style.display = v.length > 0 ? 'block' : 'none';
+                                    
+                                    const errorEl = document.getElementById('reg-process-error');
+                                    if (v.length === 10) {
+                                        const base = v.substring(0, 9);
+                                        const typed = v.substring(9, 10);
+                                        const calc = calculateSEIDigit(base);
+                                        if (typed !== calc) {
+                                            errorEl.innerText = '⚠️ Dígito verificador incorreto!';
+                                            errorEl.style.display = 'block';
+                                            this.classList.add('border-red-500');
+                                        } else {
+                                            errorEl.style.display = 'none';
+                                            this.classList.remove('border-red-500');
+                                        }
+                                    } else {
+                                        errorEl.style.display = 'none';
+                                        this.classList.remove('border-red-500');
+                                    }
+                                " 
                                 placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
+                            <p id="reg-process-error" class="text-red-500 text-[10px] font-bold mt-1" style="display: none;"></p>
                         </div>
                         <div id="reg-date-container" style="display: ${registroParaEditar && registroParaEditar.processNumber ? 'block' : 'none'};">
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Data do Processo</label>
@@ -1019,7 +1123,7 @@
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Assunto / Descrição</label>
                             <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${registroParaEditar ? registroParaEditar.subject : ''}</textarea>
                         </div>
-                        <div>
+                        <div style="display: none;">
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Endereço (Origem)</label>
                             <input type="text" id="form-address" placeholder="Rua, Número, Bairro..." value="${registroParaEditar ? (registroParaEditar.address || registroParaEditar.adress || '') : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                         </div>
@@ -1067,15 +1171,31 @@
                 return;
             }
 
+            if (processNumber) {
+                const digits = processNumber.replace(/\D/g, '');
+                if (digits.length === 10) {
+                    const base = digits.substring(0, 9);
+                    const typedDigit = digits.substring(9, 10);
+                    const calculatedDigit = calculateSEIDigit(base);
+                    if (typedDigit !== calculatedDigit) {
+                        alert(`⚠️ O número do processo informado possui um dígito verificador incorreto. Por favor, revise os algarismos.`);
+                        return;
+                    }
+                } else if (digits.length > 0 && digits.length < 10) {
+                    alert("O número do processo SEI deve ter 10 dígitos (incluindo o dígito verificador).");
+                    return;
+                }
+            }
+
             const isUpdate = registroParaEditar !== null;
             const finalId = isUpdate ? registroParaEditar.id : String(Date.now());
 
-            // Tentar obter a localização antes de salvar (apenas para novos registros)
-            let latitude = "";
-            let longitude = "";
+            // Tentar obter a localização antes de salvar
+            let latitude = isUpdate ? (registroParaEditar.latitude || "") : "";
+            let longitude = isUpdate ? (registroParaEditar.longitude || "") : "";
             let address = document.getElementById('form-address') ? document.getElementById('form-address').value : "Endereço não identificado";
 
-            if (!isUpdate) {
+            { // Bloco de geolocalização automática
                 const getLocation = () => {
                     return new Promise((resolve) => {
                         if (!navigator.geolocation) {
@@ -1155,7 +1275,9 @@
                 status: status,
                 createdAt: isUpdate ? registroParaEditar.createdAt : new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                address: address // Protocolo Estrito: address conforme solicitado
+                address: address, // Protocolo Estrito: address conforme solicitado
+                latitude: latitude,
+                longitude: longitude
             };
 
             if (isUpdate) {
