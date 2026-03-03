@@ -132,6 +132,51 @@
             return String(11 - remainder);
         }
 
+        window.handleProcessNumberInput = function(el, event) {
+            const inputType = event ? event.inputType : '';
+            let cursor = el.selectionStart;
+            let v = el.value.replace(/\D/g, '').substring(0, 10);
+            
+            let r = '';
+            if (v.length > 0) r += v.slice(0, 2);
+            if (v.length > 2) r += '.' + v.slice(2, 3);
+            if (v.length > 3) r += '.' + v.slice(3, 9);
+            if (v.length > 9) r += '-' + v.slice(9, 10);
+            
+            el.value = r;
+            
+            // Ajuste do cursor para evitar pulos e permitir backspace
+            if (inputType && !inputType.includes('delete')) {
+                if (r.length > cursor && (r[cursor-1] === '.' || r[cursor-1] === '-')) {
+                    cursor++;
+                }
+            }
+            el.setSelectionRange(cursor, cursor);
+
+            const dateContainer = document.getElementById('reg-date-container');
+            if (dateContainer) dateContainer.style.display = v.length > 0 ? 'block' : 'none';
+            
+            const errorEl = document.getElementById('reg-process-error');
+            if (errorEl) {
+                if (v.length === 10) {
+                    const base = v.substring(0, 9);
+                    const typed = v.substring(9, 10);
+                    const calc = calculateSEIDigit(base);
+                    if (typed !== calc) {
+                        errorEl.innerText = '⚠️ Dígito verificador incorreto!';
+                        errorEl.style.display = 'block';
+                        el.classList.add('border-red-500');
+                    } else {
+                        errorEl.style.display = 'none';
+                        el.classList.remove('border-red-500');
+                    }
+                } else {
+                    errorEl.style.display = 'none';
+                    el.classList.remove('border-red-500');
+                }
+            }
+        };
+
         function openGoogleMaps() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition((pos) => {
@@ -1088,34 +1133,7 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Processo</label>
                             <input type="text" id="reg-processNumber" maxlength="13" value="${registroParaEditar ? registroParaEditar.processNumber : ''}"
-                                oninput="
-                                    let v = this.value.replace(/\D/g, '').substring(0,10); 
-                                    let r = ''; 
-                                    if (v.length > 0) r += v.slice(0, 2); 
-                                    if (v.length > 2) r += '.' + v.slice(2, 3); 
-                                    if (v.length > 3) r += '.' + v.slice(3, 9); 
-                                    if (v.length > 9) r += '-' + v.slice(9, 10); 
-                                    this.value = r; 
-                                    document.getElementById('reg-date-container').style.display = v.length > 0 ? 'block' : 'none';
-                                    
-                                    const errorEl = document.getElementById('reg-process-error');
-                                    if (v.length === 10) {
-                                        const base = v.substring(0, 9);
-                                        const typed = v.substring(9, 10);
-                                        const calc = calculateSEIDigit(base);
-                                        if (typed !== calc) {
-                                            errorEl.innerText = '⚠️ Dígito verificador incorreto!';
-                                            errorEl.style.display = 'block';
-                                            this.classList.add('border-red-500');
-                                        } else {
-                                            errorEl.style.display = 'none';
-                                            this.classList.remove('border-red-500');
-                                        }
-                                    } else {
-                                        errorEl.style.display = 'none';
-                                        this.classList.remove('border-red-500');
-                                    }
-                                " 
+                                oninput="window.handleProcessNumberInput(this, event)" 
                                 placeholder="99.9.999999-9" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                             <p id="reg-process-error" class="text-red-500 text-[10px] font-bold mt-1" style="display: none;"></p>
                         </div>
