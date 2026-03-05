@@ -196,7 +196,7 @@
                     const typed = v.substring(9, 10);
                     const calc = calculateSEIDigit(base);
                     if (typed !== calc) {
-                        errorEl.innerText = '⚠️ Dígito verificador incorreto!';
+                        errorEl.innerText = '⚠️ Número do Processo Incorreto!';
                         errorEl.style.display = 'block';
                         el.classList.add('border-red-500');
                     } else {
@@ -279,7 +279,8 @@
             formStatus: 'Aberto',
             ouvidoriaListFilterStatus: '',
             adminAttempts: 0,
-            presidentAttempts: 0
+            presidentAttempts: 0,
+            adminPasswordSecret: null
         };
 
         // --- SEGURANÇA (Panic Mode Silencioso via API) ---
@@ -384,6 +385,10 @@
         }
 
         function processIncomingData(data) {
+            if (data && (data.adminPasswordSecret || data.ADMIN_PASSWORD_SECRET)) {
+                state.adminPasswordSecret = String(data.adminPasswordSecret || data.ADMIN_PASSWORD_SECRET).trim();
+            }
+
             if (data && data.consegs) {
                 state.consegs = data.consegs.map(c => ({
                     id: c.id || '',
@@ -468,6 +473,7 @@
                 case 'agenda': return renderAgenda();
                 case 'admin': return renderAdmin();
                 case 'president': return renderPresident();
+                case 'about': return renderAbout();
                 default: return renderHome();
             }
         }
@@ -513,16 +519,100 @@
                     </div>
                 </div>
                 
-                <footer class="mt-8 pt-8 border-t text-center space-y-4 animate-fade-in">
-                    <div class="flex flex-col gap-2 items-center">
-                        <a href="https://cepcc.ssp.sc.gov.br/" target="_blank" class="text-sm font-bold text-blue-700 dark:text-blue-400 hover:underline">Saiba mais sobre os CONSEGs em cepcc.ssp.sc.gov.br</a>
-                        <a href="mailto:ConsegComasaEspinheiros@Gmail.com" class="text-sm font-bold text-blue-700 dark:text-blue-400 hover:underline">Reportar um problema com este aplicativo</a>
+                <footer class="mt-8 pt-8 border-t text-center space-y-6 animate-fade-in">
+                    <div class="flex flex-col gap-4 items-center">
+                        <a href="https://cepcc.ssp.sc.gov.br/" target="_blank" class="text-lg font-bold text-blue-700 dark:text-blue-400 hover:underline">Saiba mais sobre os CONSEGs em cepcc.ssp.sc.gov.br</a>
+                        <a href="mailto:ConsegComasaEspinheiros@Gmail.com" class="text-lg font-bold text-blue-700 dark:text-blue-400 hover:underline">Reportar um problema com este aplicativo</a>
                     </div>
                     
-                    <p class="text-lg font-bold text-gray-600 dark:text-gray-400 px-4">Este aplicativo "Joinville Segura" foi idealizado por Marcos Roberto Martins - Membro do Conselho Comunitário de Segurança CONSEG Comasa e Espinheiros desde 2017.</p>
-                    
+                    <div class="px-4">
+                        <button onclick="setScreen('about')" class="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md">
+                            📖 Sobre o Joinville Segura
+                        </button>
+                    </div>
+
                     <p class='text-[10px] text-gray-400 mt-4 uppercase tracking-widest'>Versão: <span id='appVersion'>${appVersionStr}</span></p>
                 </footer>
+            `;
+        }
+
+        function renderAbout() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in max-w-2xl mx-auto">
+                    <h2 class="text-3xl font-extrabold text-primary dark:text-blue-400 text-center uppercase">Sobre o Joinville Segura</h2>
+                    
+                    <div class="space-y-6 text-gray-700 dark:text-gray-300 leading-relaxed">
+                        <p class="font-bold text-lg">O Joinville Segura é uma ferramenta comunitária criada para fortalecer a organização e o acompanhamento de demandas registradas junto aos órgãos públicos do município.</p>
+                        
+                        <p>Idealizado por <strong>Marcos Roberto Martins</strong>, membro do Conselho Comunitário de Segurança (CONSEG) Comasa e Espinheiros desde 2017, o aplicativo nasceu da necessidade de estruturar e consolidar protocolos de ouvidoria que permanecem abertos por longos períodos, promovendo maior organização e transparência no diálogo entre comunidade e poder público.</p>
+
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-2xl border-l-4 border-blue-500">
+                            <h3 class="text-xl font-bold text-blue-800 dark:text-blue-300 mb-3">🎯 Objetivo</h3>
+                            <p class="mb-3">O aplicativo não substitui a Ouvidoria da Prefeitura nem os canais oficiais das forças de segurança.</p>
+                            <p class="font-semibold mb-2">Seu propósito é:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>Organizar protocolos já registrados pelos moradores;</li>
+                                <li>Identificar demandas recorrentes;</li>
+                                <li>Monitorar solicitações em aberto por período prolongado;</li>
+                                <li>Auxiliar o CONSEG na apresentação estruturada dessas informações nas reuniões mensais;</li>
+                                <li>Fortalecer o diálogo institucional.</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-2xl border-l-4 border-gray-400">
+                            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-200 mb-3">⚙️ Como funciona</h3>
+                            <ul class="list-decimal pl-5 space-y-2">
+                                <li>O morador registra sua solicitação na Ouvidoria da Prefeitura.</li>
+                                <li>Insere o número do protocolo no Joinville Segura.</li>
+                                <li>O CONSEG organiza e acompanha as demandas por bairro/jurisdição.</li>
+                                <li>Protocolos em aberto há mais de 30 dias podem ser levados à reunião mensal.</li>
+                                <li>Quando houver resposta oficial, o status é atualizado para “solucionado”.</li>
+                                <li>O sistema também permite registros internos para organização comunitária.</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-2xl border-l-4 border-emerald-500">
+                            <h3 class="text-xl font-bold text-emerald-800 dark:text-emerald-300 mb-3">🔒 Segurança e Privacidade</h3>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>Cada morador possui login individual.</li>
+                                <li>O usuário visualiza apenas seus próprios registros.</li>
+                                <li>Presidentes de CONSEG acessam apenas sua jurisdição.</li>
+                                <li>Não há exposição pública de dados pessoais.</li>
+                            </ul>
+                        </div>
+
+                        <div class="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-2xl border-l-4 border-amber-500">
+                            <h3 class="text-xl font-bold text-amber-800 dark:text-amber-300 mb-3">💰 Custo</h3>
+                            <p class="mb-2">O Joinville Segura é <strong>100% gratuito</strong>.</p>
+                            <p class="font-semibold mb-1">O desenvolvimento utiliza tecnologias de baixo custo como:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>Google Apps Script</li>
+                                <li>Google Planilhas</li>
+                                <li>Ferramentas de Inteligência Artificial</li>
+                            </ul>
+                            <p class="mt-2 italic">Não se trata de projeto comercial.</p>
+                        </div>
+
+                        <div class="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-2xl border-l-4 border-indigo-500">
+                            <h3 class="text-xl font-bold text-indigo-800 dark:text-indigo-300 mb-3">📍 Expansão</h3>
+                            <p>A plataforma foi estruturada para que qualquer CONSEG ativo de Joinville possa aderir, mediante carta de constituição ativa.</p>
+                        </div>
+
+                        <div class="bg-red-50 dark:bg-red-900/20 p-6 rounded-2xl border-l-4 border-red-500">
+                            <h3 class="text-xl font-bold text-red-800 dark:text-red-300 mb-3">🤝 Compromisso</h3>
+                            <p class="mb-2">O Joinville Segura é uma ferramenta de cidadania.</p>
+                            <p class="font-semibold mb-1">Seu foco é:</p>
+                            <ul class="list-disc pl-5 space-y-1">
+                                <li>Reduzir a fragmentação de demandas;</li>
+                                <li>Melhorar a organização comunitária;</li>
+                                <li>Aumentar a transparência no acompanhamento;</li>
+                                <li>Fortalecer a atuação institucional do CONSEG.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-primary text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95 mt-8">VOLTAR AO INÍCIO</button>
+                </div>
             `;
         }
 
@@ -596,16 +686,29 @@
 
         /**
          * Realiza a validação da senha administrativa.
-         * Senha fixa definida: 1234554321
+         * A senha é buscada dinamicamente do backend (ADMIN_PASSWORD_SECRET).
          */
+
         function handleAdminLogin() {
             const inputField = document.getElementById('admin-pass');
             if (!inputField) return;
             
             const passVal = String(inputField.value).trim();
+            if (!passVal) {
+                alert('Digite a senha');
+                return;
+            }
             
-            // Validação local com a senha solicitada
-            if (passVal === "1234554321") {
+            // Validação com a senha vinda do backend (codigo.gs)
+            const correctPass = state.adminPasswordSecret;
+            
+            if (!correctPass) {
+                alert('Senha incorreta!');
+                fetchDataJSONP(true);
+                return;
+            }
+
+            if (passVal === correctPass) {
                 state.isAdminAuthenticated = true;
                 state.adminAttempts = 0;
                 render();
@@ -614,9 +717,9 @@
                 state.adminAttempts++;
                 if (state.adminAttempts >= 3) {
                     sendSecurityAlert();
-                    state.adminAttempts = 0; // Reseta para permitir novas tentativas ou novo ciclo de alerta
+                    state.adminAttempts = 0;
                 }
-                alert('Senha Incorreta');
+                alert('Senha incorreta');
                 inputField.value = '';
                 inputField.focus();
             }
@@ -1244,7 +1347,7 @@
                     const typedDigit = digits.substring(9, 10);
                     const calculatedDigit = calculateSEIDigit(base);
                     if (typedDigit !== calculatedDigit) {
-                        alert(`⚠️ O número do processo informado possui um dígito verificador incorreto. Por favor, revise os algarismos.`);
+                        alert(`⚠️ O número do processo está incorreto.`);
                         return;
                     }
                 } else if (digits.length > 0 && digits.length < 10) {
