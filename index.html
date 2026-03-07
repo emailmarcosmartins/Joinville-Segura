@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_0002"; // Timestamp da Versão
+            const APP_VERSION = "20260305_0003"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -962,9 +962,16 @@
                             ${filtered.length === 0 ? '<p class="text-center py-10 font-bold text-gray-500">Nenhum registro encontrado para os filtros aplicados.</p>' : filtered.map(r => `
                                 <div class="bg-gray-50 dark:bg-gray-700 p-5 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-md relative">
                                     <div class="flex flex-col gap-1 pr-14">
-                                        <div class="flex flex-wrap items-center gap-2 mb-1">
-                                            <span class="${getStatusBadgeClass(r.status)} px-2 py-1 rounded text-[20px] font-bold uppercase tracking-tight">${r.status}</span>
-                                            ${r.processNumber ? `<span class="font-extrabold text-sm text-primary">Proc: ${r.processNumber}</span>` : ''}
+                                        <div class="flex flex-col gap-1 mb-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="${getStatusBadgeClass(r.status)} px-2 py-1 rounded text-[20px] font-bold uppercase tracking-tight">${r.status}</span>
+                                            </div>
+                                            ${r.processNumber ? `
+                                                <div class="flex flex-col">
+                                                    <span class="font-extrabold text-sm text-primary">Proc: ${r.processNumber}</span>
+                                                    ${r.processDate ? `<span class="text-[10px] font-bold text-primary">Data: ${new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>` : ''}
+                                                </div>
+                                            ` : ''}
                                         </div>
                                         <p class="font-extrabold text-gray-800 dark:text-gray-100 text-base">${r.userName || 'Usuário'}</p>
                                         <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-2 leading-tight">${r.subject || 'Sem assunto'}</p>
@@ -982,8 +989,8 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="flex justify-between items-center pt-3 border-t text-[10px] text-gray-400 italic">
-                                        <span>📅 Registro: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                                    <div class="flex flex-col pt-3 border-t mt-3 text-[10px] italic">
+                                        <span class="bg-blue-100 text-blue-900 px-2 py-0.5 rounded font-bold w-fit">📅 Registro: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                                     </div>
                                 </div>
                             `).join('')}
@@ -1248,13 +1255,18 @@
                             <div class="p-5 bg-gray-50 dark:bg-gray-700 rounded-2xl border-l-8 ${getStatusBorderClass(r.status)} shadow-sm relative group">
                                 <div class="flex flex-col gap-1 pr-16">
                                     <p class="font-bold text-gray-800 dark:text-gray-100 text-xl">${r.subject}</p>
-                                    ${r.processNumber ? `<p class="text-sm font-black text-primary">Proc: ${r.processNumber} ${r.processDate ? '(' + new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')' : ''}</p>` : ''}
-                                    <div class="text-[10px] flex gap-4 text-gray-500">
+                                    ${r.processNumber ? `
+                                        <div class="flex flex-col">
+                                            <span class="text-sm font-black text-primary">Proc: ${r.processNumber}</span>
+                                            ${r.processDate ? `<span class="text-[10px] font-bold text-primary">Data: ${new Date(r.processDate).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>` : ''}
+                                        </div>
+                                    ` : ''}
+                                    <div class="text-[10px] flex gap-4 text-gray-500 mt-1">
                                         <span>CONSEG: ${state.consegs.find(c => c.id === r.consegId)?.nome || 'S/ Ref'}</span>
                                     </div>
                                 </div>
                                 <div class="flex flex-col pt-3 border-t mt-3 text-[10px] italic">
-                                    <span class="bg-blue-100 text-blue-900 px-2 py-0.5 rounded font-bold w-fit mb-1">📅 Registro: ${new Date(r.createdAt).toLocaleString()}</span>
+                                    <span class="bg-blue-100 text-blue-900 px-2 py-0.5 rounded font-bold w-fit mb-1">📅 Registro: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
                                     <span class="${getStatusBadgeClass(r.status)} font-black uppercase px-2 py-0.5 rounded text-[10px] w-fit not-italic">${r.status}</span>
                                 </div>
                                 ${valid ? `
