@@ -459,6 +459,7 @@
             state.presidentView = 'login'; 
             state.filterStatus = 'Todos'; // Resetar filtros ao trocar de tela principal
             render(); 
+            window.scrollTo(0, 0); // Garantir que a nova tela comece do topo
         }
 
         function toggleDarkMode() {
