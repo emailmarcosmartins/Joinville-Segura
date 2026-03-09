@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_0002"; // Timestamp da Versão
+            const APP_VERSION = "20260305_0007"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -48,7 +48,8 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { font-family: 'Inter', sans-serif; scroll-behavior: auto !important; }
+        html { scroll-behavior: auto !important; }
         .elderly-text { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; }
         input:not(.no-elderly), select:not(.no-elderly), textarea:not(.no-elderly) { font-size: 1.25rem !important; font-weight: 600 !important; }
         
@@ -65,7 +66,7 @@
         button:active { transform: scale(0.95); }
         .scroll-hidden::-webkit-scrollbar { display: none; }
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         
         /* Estilos de borda por status */
         .status-border-pendente { border-left-color: #ef4444 !important; } /* Vermelho */
@@ -118,6 +119,11 @@
     </div>
 
     <script>
+        // Prevenir restauração automática de scroll pelo navegador
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+
         // --- TÉCNICA JSONP GLOBAL ---
         let registroParaEditar = null; // Variável de Suporte
         window.ultimosRegistros = []; // Captura de Dados na Busca
@@ -459,7 +465,34 @@
             state.presidentView = 'login'; 
             state.filterStatus = 'Todos'; // Resetar filtros ao trocar de tela principal
             render(); 
-            window.scrollTo(0, 0); // Garantir que a nova tela comece do topo
+            
+            // Forçar o scroll para o topo de forma imediata e agressiva
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+            
+            // Tentar usar scrollIntoView no container principal
+            const root = document.getElementById('root');
+            if (root) {
+                root.scrollIntoView({ behavior: 'auto', block: 'start' });
+            }
+            
+            // Tentar focar no header para forçar o browser a subir
+            const header = document.querySelector('header');
+            if (header) {
+                header.setAttribute('tabindex', '-1');
+                header.focus({ preventScroll: false });
+            }
+
+            // Repetir com múltiplos delays para garantir que o navegador processou a mudança de DOM e layout
+            [50, 150, 300].forEach(delay => {
+                setTimeout(() => {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                    if (root) root.scrollIntoView({ behavior: 'auto', block: 'start' });
+                }, delay);
+            });
         }
 
         function toggleDarkMode() {
