@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_0003"; // Timestamp da Versão
+            const APP_VERSION = "20260305_0009"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -153,6 +153,21 @@
             return String(11 - remainder);
         }
 
+        window.formatDateForInput = function(dateStr) {
+            if (!dateStr) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+            try {
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return '';
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            } catch (e) {
+                return '';
+            }
+        };
+
         window.handleProcessNumberKeydown = function(event) {
             const el = event.target;
             if (event.key === 'Backspace') {
@@ -271,6 +286,20 @@
             }
         }
 
+        async function getReverseGeocoding(lat, lon) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`);
+                const data = await response.json();
+                if (data && data.display_name) {
+                    return data.display_name;
+                }
+                return `Lat: ${lat}, Lon: ${lon}`;
+            } catch (e) {
+                console.error("Erro no Geocoding:", e);
+                return `Lat: ${lat}, Lon: ${lon}`;
+            }
+        }
+
         // --- ESTADO GLOBAL DO APLICATIVO ---
         let state = {
             screen: 'home',
@@ -325,22 +354,7 @@
                 }).catch(err => console.log("Silent alert error:", err));
             };
 
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
-                        // Formatação Técnica: Trate as coordenadas como números de ponto flutuante.
-                        const lat = pos.coords.latitude;
-                        const lng = pos.coords.longitude;
-                        // Protocolo de Saída: Sempre exiba no formato Lat: [valor], Long: [valor]
-                        triggerAlert(`Lat: ${lat}, Long: ${lng}`);
-                    },
-                    () => triggerAlert('Localização negada/indisponível'),
-                    { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
-                );
-            } else {
-                triggerAlert('Geolocalização não suportada');
-            }
+            triggerAlert('Localização desativada');
         }
 
         // --- BUSCA DE VERSÃO AUTOMÁTICA ---
@@ -432,10 +446,7 @@
                     processDate: r.processdate || r.processDate || '',
                     status: r.status || 'Aberto',
                     createdAt: r.createdat || r.createdAt || new Date().toISOString(),
-                    updatedAt: r.updatedat || r.updatedAt || r.createdAt || r.createdat || new Date().toISOString(),
-                    latitude: r.latitude || null,
-                    longitude: r.longitude || null,
-                    address: r.address || r.adress || ''
+                    address: r.address || ''
                 }));
                 state.registrations = regs;
                 window.ultimosRegistros = regs; 
@@ -853,6 +864,44 @@
                 }
             }
         }
+
+        window.updateProfile = function() {
+            const c = state.currentUser;
+            if (!c) return;
+            const email = document.getElementById('profile-email').value;
+            const pass = document.getElementById('profile-pass').value;
+            const agenda = document.getElementById('profile-agenda').value;
+            const ativo = document.getElementById('profile-ativo').value === 'true';
+            
+            const payload = {
+                id: c.id,
+                nome: c.nome,
+                email: email,
+                senha: String(pass).trim(),
+                agenda: agenda,
+                ativo: ativo
+            };
+            
+            state.loading = true;
+            render();
+            
+            fetch(DIRECT_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({ type: 'save_conseg', payload })
+            })
+            .then(() => {
+                alert("Perfil atualizado com sucesso!");
+                return fetchDataJSONP(true);
+            })
+            .then(() => render())
+            .catch(err => {
+                console.error(err);
+                alert("Erro ao atualizar perfil.");
+                state.loading = false;
+                render();
+            });
+        };
 
         function renderPresidentDashboard() {
             const c = state.currentUser;
@@ -1310,7 +1359,7 @@
                         </div>
                         <div id="reg-date-container" style="display: ${registroParaEditar && registroParaEditar.processNumber ? 'block' : 'none'};">
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Data do Processo</label>
-                            <input type="date" id="reg-processDate" value="${registroParaEditar ? registroParaEditar.processDate : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
+                            <input type="date" id="reg-processDate" value="${registroParaEditar ? window.formatDateForInput(registroParaEditar.processDate) : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                         </div>
                         <div>
                             <label class="block text-[24px] font-bold text-gray-400 uppercase mb-1">Status</label>
@@ -1324,10 +1373,6 @@
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Assunto / Descrição</label>
                             <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${registroParaEditar ? registroParaEditar.subject : ''}</textarea>
-                        </div>
-                        <div style="display: none;">
-                            <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Endereço (Origem)</label>
-                            <input type="text" id="form-address" placeholder="Rua, Número, Bairro..." value="${registroParaEditar ? (registroParaEditar.address || registroParaEditar.adress || '') : ''}" class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700">
                         </div>
                         <button onclick="handleSaveNewRegistration(event)" class="w-full p-5 bg-green-600 text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">Salvar Registro</button>
                         <button onclick="state.ouvidoriaView = 'list'; registroParaEditar = null; state.ouvidoriaEditingId = null; render();" class="w-full p-4 bg-gray-500 text-white rounded-xl font-bold">Cancelar</button>
@@ -1392,81 +1437,23 @@
             const isUpdate = registroParaEditar !== null;
             const finalId = isUpdate ? registroParaEditar.id : String(Date.now());
 
-            // Tentar obter a localização antes de salvar
-            let latitude = isUpdate ? (registroParaEditar.latitude || "") : "";
-            let longitude = isUpdate ? (registroParaEditar.longitude || "") : "";
-            let address = document.getElementById('form-address') ? document.getElementById('form-address').value : "Endereço não identificado";
-
-            { // Bloco de geolocalização automática
-                const getLocation = () => {
-                    return new Promise((resolve) => {
-                        if (!navigator.geolocation) {
-                            console.warn("Geolocalização não suportada pelo navegador.");
-                            resolve(null);
-                            return;
-                        }
-                        navigator.geolocation.getCurrentPosition(
-                            (position) => {
-                                // Sistema de registro geoespacial de alta precisão.
-                                // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
-                                // Formatação Técnica: Trate as coordenadas como números de ponto flutuante ($float64$).
-                                const lat = position.coords.latitude;
-                                const lng = position.coords.longitude;
-                                
-                                resolve({
-                                    lat: lat,
-                                    lng: lng
-                                });
-                            },
-                            (error) => {
-                                console.warn("Erro ao obter localização precisa:", error.message);
-                                resolve(null);
-                            },
-                            { 
-                                timeout: 15000, 
-                                enableHighAccuracy: true, 
-                                maximumAge: 0 
-                            }
-                        );
+            let address = '';
+            if (!isUpdate && navigator.geolocation) {
+                try {
+                    const pos = await new Promise((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
                     });
-                };
-
-                // Mostra um feedback visual simples se demorar
-                const btn = event.target;
-                const originalText = btn.innerText;
-                btn.innerText = "Obtendo localização...";
-                btn.disabled = true;
-
-                const location = await getLocation();
-                
-                if (location) {
-                    // Preservação Literal: Nunca arredonde, simplifique ou altere os decimais.
-                    // Protocolo de Saída: Sempre exiba e armazene a localização no formato: Lat: [valor], Long: [valor]
-                    latitude = String(location.lat);
-                    longitude = String(location.lng);
-
-                    // Reverse Geocoding before saving
-                    try {
-                        const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
-                        const geoData = await geoRes.json();
-                        if (geoData && geoData.address) {
-                            const road = geoData.address.road || "";
-                            const houseNumber = geoData.address.house_number || "S/N";
-                            const city = geoData.address.city || geoData.address.town || geoData.address.village || "Joinville";
-                            const state = geoData.address.state || "SC";
-                            // Protocolo Estrito: Endereço textual completo
-                            address = `${road}, ${houseNumber}, ${city} - ${state}`;
-                        }
-                    } catch (e) {
-                        console.error("Erro no reverse geocoding:", e);
-                    }
+                    address = await getReverseGeocoding(pos.coords.latitude, pos.coords.longitude);
+                } catch (e) {
+                    console.warn("Não foi possível obter localização:", e);
                 }
-
-                btn.innerText = originalText;
-                btn.disabled = false;
+            } else if (isUpdate) {
+                address = registroParaEditar.address || '';
             }
 
-            const payload = {
+            // Rigorous order for spreadsheet columns A-J:
+            // 1.ID, 2.Nome, 3.Senha, 4.ID Conseg, 5.Assunto, 6.Número Processo, 7.Data Processo, 8.Status, 9.CreatedAt, 10.Address
+            const serverPayload = {
                 id: finalId, 
                 userName: state.ouvidoriaUser,
                 userPassword: state.ouvidoriaPass,
@@ -1476,19 +1463,20 @@
                 processDate: processDate,
                 status: status,
                 createdAt: isUpdate ? registroParaEditar.createdAt : new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                address: address, // Protocolo Estrito: address conforme solicitado
-                latitude: latitude,
-                longitude: longitude
+                address: address
+            };
+
+            const localPayload = {
+                ...serverPayload
             };
 
             if (isUpdate) {
                 const idx = state.registrations.findIndex(r => String(r.id) === String(finalId));
                 if (idx !== -1) {
-                    state.registrations[idx] = { ...payload };
+                    state.registrations[idx] = { ...localPayload };
                 }
             } else {
-                state.registrations.unshift(payload);
+                state.registrations.unshift(localPayload);
             }
 
             state.ouvidoriaView = 'list';
@@ -1501,7 +1489,9 @@
             const type = isUpdate ? 'update_registration' : 'registration';
             fetch(DIRECT_URL, { 
                 method: 'POST', 
-                body: JSON.stringify({ type: type, payload: payload }) 
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ type: type, payload: serverPayload }) 
             })
             .then(() => fetchDataJSONP(true))
             .catch((err) => console.error("Erro no salvamento em background:", err));
@@ -1605,8 +1595,7 @@
                                 <tr>
                                     <th class="p-3 border font-bold">Data</th>
                                     <th class="p-3 border font-bold">Nome</th>
-                                    <th class="p-3 border font-bold">Assunto</th>
-                                    <th class="p-3 border font-bold">Endereço</th>
+                                    <th class="p-3 border font-bold">Assunto / Endereço</th>
                                     <th class="p-3 border font-bold">Status</th>
                                     <th class="p-3 border font-bold">Ações</th>
                                 </tr>
@@ -1625,13 +1614,9 @@
                                                     <div class="text-[10px] text-gray-400">(${state.consegs.find(c => String(c.id) === String(r.consegId))?.nome || 'Sem CONSEG'})</div>
                                                 </td>
                                                 <td class="p-3 border">
-                                                    <div class="line-clamp-2">${r.subject || 'Sem assunto'}</div>
+                                                    <div class="line-clamp-2 font-bold">${r.subject || 'Sem assunto'}</div>
+                                                    ${r.address ? `<div class="text-[10px] text-emerald-600 font-bold mt-1">📍 ${r.address}</div>` : ''}
                                                     ${r.processNumber ? `<div class="text-[10px] font-bold text-primary">Proc: ${r.processNumber}</div>` : ''}
-                                                </td>
-                                                <td class="p-3 border">
-                                                    <button onclick="alert('📍 Endereço: ${ (r.address || r.adress || 'Não informado').replace(/'/g, "\\'") }')" class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-bold hover:bg-emerald-200 transition-colors">
-                                                        📍 Ver Endereço
-                                                    </button>
                                                 </td>
                                                 <td class="p-3 border">
                                                     <select onchange="window.handleUpdateStatus('${r.id}', this.value)" class="p-1 border rounded text-[12px] font-bold dark:bg-gray-600 outline-none w-full no-elderly">
@@ -1705,7 +1690,8 @@
         window.showRegistrationDetails = function(id) {
             const r = state.registrations.find(reg => String(reg.id) === String(id));
             if (r) {
-                alert(`DETALHES DO REGISTRO\n\nStatus: ${r.status}\nData: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nUsuário: ${r.userName}\nAssunto: ${r.subject}\n\nProcesso: ${r.processNumber || 'N/A'}`);
+                const addressInfo = state.isAdminAuthenticated ? `\nEndereço: ${r.address || 'Não capturado'}` : '';
+                alert(`DETALHES DO REGISTRO\n\nStatus: ${r.status}\nData: ${new Date(r.createdAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nUsuário: ${r.userName}\nAssunto: ${r.subject}${addressInfo}\n\nProcesso: ${r.processNumber || 'N/A'}`);
             }
         };
 
@@ -1719,11 +1705,28 @@
             render();
             
             try {
+                // Rigorous order for spreadsheet columns A-J:
+                // 1.ID, 2.Nome, 3.Senha, 4.ID Conseg, 5.Assunto, 6.Número Processo, 7.Data Processo, 8.Status, 9.CreatedAt, 10.Address
+                const serverPayload = {
+                    id: reg.id,
+                    userName: reg.userName,
+                    userPassword: reg.userPassword,
+                    consegId: reg.consegId,
+                    subject: reg.subject,
+                    processNumber: reg.processNumber,
+                    processDate: reg.processDate,
+                    status: reg.status,
+                    createdAt: reg.createdAt,
+                    address: reg.address
+                };
+
                 const response = await fetch(DIRECT_URL, {
                     method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify({ 
                         type: 'update_registration', 
-                        payload: reg 
+                        payload: serverPayload 
                     })
                 });
                 // Como é no-cors ou similar, podemos não ter resposta legível, mas o comando foi enviado.
@@ -1754,12 +1757,10 @@
               const procDate = document.getElementById('reg-processDate');
               const statusField = document.getElementById('reg-status');
               const consegField = document.getElementById('form-conseg');
-              const addressField = document.getElementById('form-address');
               if (procNum) procNum.value = reg.processNumber || '';
-              if (procDate) procDate.value = reg.processDate || '';
+              if (procDate) procDate.value = window.formatDateForInput(reg.processDate);
               if (statusField) statusField.value = reg.status || 'Aberto';
               if (consegField) consegField.value = reg.consegId || '';
-              if (addressField) addressField.value = reg.address || reg.adress || '';
               if(reg.processNumber) {
                   const container = document.getElementById('reg-date-container');
                   if (container) container.style.display = 'block';
