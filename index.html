@@ -1,33 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-
-<style>
-
-#installBanner{
-  position:fixed;
-  top:10px;
-  left:10px;
-  right:10px;
-  z-index:9999;
-  text-align:center;
-}
-
-#btnInstalarApp{
-  width:100%;
-  max-width:420px;
-  padding:12px;
-  font-size:16px;
-  border-radius:8px;
-  border:none;
-  background:#0A4D8C;
-  color:white;
-  font-weight:bold;
-  box-shadow:0 2px 8px rgba(0,0,0,0.25);
-}
-
-</style>
-
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="-1">
@@ -122,10 +95,6 @@
 </head>
 <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-200 min-h-screen">
 
-<div id="installBanner" style="display:none;">
-  <button id="btnInstalarApp">📲 Instalar Joinville Segura</button>
-</div>
-
     <div id="root" class="max-w-4xl mx-auto p-4 md:p-8">
         <!-- O conteúdo será injetado via React/DOM -->
     </div>
@@ -149,6 +118,7 @@
         </div>
     </div>
 
+    <script>
         // Prevenir restauração automática de scroll pelo navegador
         if ('scrollRestoration' in history) {
             history.scrollRestoration = 'manual';
@@ -337,8 +307,10 @@
         }
 
         // --- ESTADO GLOBAL DO APLICATIVO ---
+        let deferredPrompt;
         let state = {
             screen: 'home',
+            showInstallBtn: false,
             darkMode: false,
             currentTime: new Date(),
             registrations: [],
@@ -368,6 +340,30 @@
             presidentAttempts: 0,
             adminPasswordSecret: null
         };
+
+        // Capturar evento de instalação PWA
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            state.showInstallBtn = true;
+            render();
+        });
+
+        window.addEventListener('appinstalled', () => {
+            state.showInstallBtn = false;
+            deferredPrompt = null;
+            render();
+        });
+
+        async function installApp() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log('User choice outcome:', outcome);
+            state.showInstallBtn = false;
+            deferredPrompt = null;
+            render();
+        }
 
         // --- SEGURANÇA (Panic Mode Silencioso via API) ---
         function sendSecurityAlert() {
@@ -575,7 +571,18 @@
         }
 
         function renderHome() {
-            const buttons = [
+            const buttons = [];
+            
+            if (state.showInstallBtn) {
+                buttons.push({ 
+                    label: "Instalar o APP Joinville Segura", 
+                    color: "bg-primary", 
+                    icon: "📲", 
+                    click: "installApp()" 
+                });
+            }
+
+            buttons.push(
                 { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "window.open('https://oauthexternal.joinville.sc.gov.br/')" },
                 { label: "Registrar no CONSEG a OUVIDORIA da Prefeitura de Joinville", color: "bg-indigo-600", icon: "📝", click: "setScreen('ouvidoria')" },
                 { label: "Acessar o APP PMSC Cidadão da Polícia Militar", color: "bg-emerald-600", icon: "👮", click: "window.open('https://www.pm.sc.gov.br/')" },
@@ -590,7 +597,7 @@
                 { label: "Inteligência Artificial ChatGPT", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" },
                 { label: "Descobrir minha Localização Aproximada", color: "bg-lime-600", icon: "📍", click: "openGoogleMaps()" },
                 { label: "Enviar mensagem para um número WhatsApp", color: "bg-green-500", icon: "💬", click: "sendWhatsAppMessage()" }
-            ];
+            );
 
             return `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
@@ -1835,38 +1842,5 @@
           }, 100);
         };
     </script>
-
-<script>
-
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-
-  e.preventDefault();
-  deferredPrompt = e;
-
-  document.getElementById('installBanner').style.display = 'block';
-
-});
-
-document.getElementById('btnInstalarApp').addEventListener('click', async () => {
-
-  if (!deferredPrompt) return;
-
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-
-  deferredPrompt = null;
-
-});
-
-window.addEventListener('appinstalled', () => {
-
-  document.getElementById('installBanner').style.display = 'none';
-
-});
-
-</script>
-
 </body>
 </html>
