@@ -118,7 +118,52 @@
         </div>
     </div>
 
+	<button id="btnInstalarApp" style="display:none;">
+	📲 Instalar Joinville Segura
+	</button>
+
     <script>
+
+let deferredPrompt;
+
+// Detecta quando o app pode ser instalado
+window.addEventListener('beforeinstallprompt', (e) => {
+
+  e.preventDefault();
+  deferredPrompt = e;
+
+  document.getElementById('btnInstalarApp').style.display = 'block';
+
+});
+
+// Clique no botão instalar
+document.getElementById('btnInstalarApp').addEventListener('click', async () => {
+
+  if (!deferredPrompt) return;
+
+  deferredPrompt.prompt();
+
+  const choiceResult = await deferredPrompt.userChoice;
+
+  if (choiceResult.outcome === 'accepted') {
+      console.log('Usuário instalou o app');
+  } else {
+      console.log('Usuário cancelou a instalação');
+  }
+
+  deferredPrompt = null;
+
+});
+
+// Esconde o botão quando o app for instalado
+window.addEventListener('appinstalled', () => {
+
+  document.getElementById('btnInstalarApp').style.display = 'none';
+
+  console.log('App instalado com sucesso');
+
+});
+
         // Prevenir restauração automática de scroll pelo navegador
         if ('scrollRestoration' in history) {
             history.scrollRestoration = 'manual';
