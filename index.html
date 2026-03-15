@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_0009"; // Timestamp da Versão
+            const APP_VERSION = "20260305_0010"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -107,6 +107,7 @@
                 <div>
                     <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Número do Celular (11 dígitos)</label>
                     <input type="text" id="wa-number" maxlength="11" placeholder="DDD9XXXXXXXX" 
+                        inputmode="numeric" pattern="[0-9]*"
                         oninput="this.value = this.value.replace(/\D/g, '')"
                         class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 text-center text-2xl">
                 </div>
