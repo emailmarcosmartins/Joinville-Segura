@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_010"; // Timestamp da Versão
+            const APP_VERSION = "20260305_011"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -615,26 +615,31 @@
 function abrirNoChrome() {
 
     const url = "https://facil.joinville.sc.gov.br/";
-
-    // Tenta abrir direto no Chrome (Android)
     const intent = "intent://facil.joinville.sc.gov.br/#Intent;scheme=https;package=com.android.chrome;end";
 
-    // Detecta Android
     const isAndroid = /Android/i.test(navigator.userAgent);
 
-    if (isAndroid) {
-
-        window.location.href = intent;
-
-        // Se não abrir, redireciona para instalar Chrome
-        setTimeout(() => {
-            window.location.href = "https://play.google.com/store/apps/details?id=com.android.chrome";
-        }, 2000);
-
-    } else {
-        // iPhone / desktop → abre normal
+    if (!isAndroid) {
         window.open(url, '_blank');
+        return;
     }
+
+    let saiuDaPagina = false;
+
+    // Detecta se o navegador perdeu foco (usuário saiu para outro app)
+    window.addEventListener('blur', () => {
+        saiuDaPagina = true;
+    });
+
+    // Tenta abrir no Chrome
+    window.location.href = intent;
+
+    // Fallback inteligente
+    setTimeout(() => {
+        if (!saiuDaPagina) {
+            window.location.href = "https://play.google.com/store/apps/details?id=com.android.chrome";
+        }
+    }, 1500);
 }
 
         function renderFooter() {
