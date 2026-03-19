@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_013"; // Timestamp da Versão
+            const APP_VERSION = "20260305_014"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -584,7 +584,7 @@
             }
 
             buttons.push(
-                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "abrirOuvidoria()" },
+                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "abrirNoChrome()" },
                 { label: "Registrar no CONSEG a OUVIDORIA da Prefeitura de Joinville", color: "bg-indigo-600", icon: "📝", click: "setScreen('ouvidoria')" },
                 { label: "Acessar o APP PMSC Cidadão da Polícia Militar", color: "bg-emerald-600", icon: "👮", click: "window.open('https://www.pm.sc.gov.br/')" },
                 { label: "Registrar Boletim de Ocorrência (B.O.) na Polícia Civil", color: "bg-red-600", icon: "📑", click: "window.open('https://delegaciavirtual.sc.gov.br/')" },
@@ -612,117 +612,46 @@
             `;
         }
 
-function abrirOuvidoria() {
-
+function abrirNoChrome() {
     const url = "https://facil.joinville.sc.gov.br/";
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edg/i.test(navigator.userAgent);
 
-    // Se já está no Chrome → abre direto
-    if (isChrome) {
-        window.open(url, "_blank");
-        return;
-    }
+    // Cria intent para Chrome
+    const intentUrl = "intent://" + url.replace(/^https?:\/\//, "") +
+        "#Intent;scheme=https;package=com.android.chrome;end";
 
-    // Se NÃO está no Chrome → mostra aviso
-    mostrarAvisoChrome(url);
+    // Tenta abrir Chrome
+    window.location.href = intentUrl;
+
+    // Fallback após tentativa
+    setTimeout(() => {
+        fallback(url);
+    }, 1500);
 }
 
-function mostrarAvisoChrome(url) {
+function fallback(url) {
+    copiarTexto(url);
 
-    const modal = document.createElement("div");
-
-    modal.innerHTML = `
-    <div style="
-        position:fixed;
-        top:0;left:0;
-        width:100%;height:100%;
-        background:rgba(0,0,0,0.6);
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        z-index:9999;
-    ">
-        <div style="
-            background:white;
-            padding:20px;
-            border-radius:12px;
-            max-width:90%;
-            text-align:center;
-        ">
-            <h3 style="font-size:18px;font-weight:bold;margin-bottom:10px;">
-                ⚠️ Melhor experiência no Google Chrome
-            </h3>
-
-            <p style="margin-bottom:15px;">
-                Este sistema funciona melhor no <b>Google Chrome</b>.<br><br>
-                Seu celular está usando outro navegador.
-            </p>
-
-            <button onclick="tentarAbrirChrome('${url}')" style="
-                width:100%;
-                padding:12px;
-                margin-bottom:10px;
-                background:#0A4D8C;
-                color:white;
-                border:none;
-                border-radius:8px;
-            ">
-                🌐 Abrir no Chrome
-            </button>
-
-            <button onclick="window.location.href='https://play.google.com/store/apps/details?id=com.android.chrome'" style="
-                width:100%;
-                padding:12px;
-                margin-bottom:10px;
-                background:#34A853;
-                color:white;
-                border:none;
-                border-radius:8px;
-            ">
-                ⬇️ Instalar Google Chrome
-            </button>
-
-            <button onclick="mostrarInstrucoes()" style="
-                width:100%;
-                padding:12px;
-                background:#f1f1f1;
-                border:none;
-                border-radius:8px;
-            ">
-                ⚙️ Definir Chrome como padrão
-            </button>
-
-            <br><br>
-
-            <button onclick="this.closest('div').parentElement.remove()" style="
-                background:none;
-                border:none;
-                color:#666;
-            ">
-                Continuar mesmo assim
-            </button>
-        </div>
-    </div>
-    `;
-
-    document.body.appendChild(modal);
-}
-
-function tentarAbrirChrome(url) {
-    window.location.href = "intent://" + url.replace("https://", "") + "#Intent;scheme=https;package=com.android.chrome;end";
-}
-
-function mostrarInstrucoes() {
     alert(
-`Para definir o Chrome como navegador padrão:
-
-1. Abra Configurações do celular
-2. Vá em "Aplicativos"
-3. Toque em "Apps padrão"
-4. Selecione "Navegador"
-5. Escolha "Google Chrome"`
+        "O Google Chrome não está instalado ou não é o navegador padrão.\n\n" +
+        "O link foi copiado.\n\n" +
+        "Instale o Chrome e cole o link para acessar."
     );
+
+    // Abre Play Store
+    window.location.href = "https://play.google.com/store/apps/details?id=com.android.chrome";
+}
+
+function copiarTexto(texto) {
+    try {
+        navigator.clipboard.writeText(texto);
+    } catch {
+        const input = document.createElement("textarea");
+        input.value = texto;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+    }
 }
 
         function renderFooter() {
