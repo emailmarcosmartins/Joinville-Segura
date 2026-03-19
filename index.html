@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260305_0010"; // Timestamp da Versão
+            const APP_VERSION = "20260305_010"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -584,7 +584,7 @@
             }
 
             buttons.push(
-                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "window.open('https://facil.joinville.sc.gov.br/')" },
+                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-blue-600", icon: "🏢", click: "abrirNoChrome()" },
                 { label: "Registrar no CONSEG a OUVIDORIA da Prefeitura de Joinville", color: "bg-indigo-600", icon: "📝", click: "setScreen('ouvidoria')" },
                 { label: "Acessar o APP PMSC Cidadão da Polícia Militar", color: "bg-emerald-600", icon: "👮", click: "window.open('https://www.pm.sc.gov.br/')" },
                 { label: "Registrar Boletim de Ocorrência (B.O.) na Polícia Civil", color: "bg-red-600", icon: "📑", click: "window.open('https://delegaciavirtual.sc.gov.br/')" },
@@ -611,6 +611,31 @@
                 </div>
             `;
         }
+
+function abrirNoChrome() {
+
+    const url = "https://facil.joinville.sc.gov.br/";
+
+    // Tenta abrir direto no Chrome (Android)
+    const intent = "intent://facil.joinville.sc.gov.br/#Intent;scheme=https;package=com.android.chrome;end";
+
+    // Detecta Android
+    const isAndroid = /Android/i.test(navigator.userAgent);
+
+    if (isAndroid) {
+
+        window.location.href = intent;
+
+        // Se não abrir, redireciona para instalar Chrome
+        setTimeout(() => {
+            window.location.href = "https://play.google.com/store/apps/details?id=com.android.chrome";
+        }, 2000);
+
+    } else {
+        // iPhone / desktop → abre normal
+        window.open(url, '_blank');
+    }
+}
 
         function renderFooter() {
             return `
