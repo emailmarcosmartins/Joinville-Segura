@@ -325,6 +325,7 @@
             filterPeriodEnd: '',
             filterStatus: 'Todos', 
             filterConseg: '',
+            filterProcessNumber: '',
             ouvidoriaUser: '',
             ouvidoriaPass: '',
             ouvidoriaEditingId: null,
@@ -492,6 +493,7 @@
             state.adminEditingConseg = null; 
             state.presidentView = 'login'; 
             state.filterStatus = 'Todos'; // Resetar filtros ao trocar de tela principal
+            state.filterProcessNumber = '';
             render(); 
             
             // Forçar o scroll para o topo de forma imediata e agressiva
@@ -585,16 +587,16 @@
             }
 
             buttons.push(
-                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (App Joinville Fácil)", color: "bg-indigo-600", icon: "🏢", click: "window.open('https://facil.joinville.sc.gov.br/')" },
+                { label: "Abrir OUVIDORIA na Prefeitura de Joinville (JOINVILLE FÁCIL)", color: "bg-indigo-600", icon: "🏢", click: "window.open('https://facil.joinville.sc.gov.br/')" },
                 { label: "Registrar no CONSEG a OUVIDORIA da Prefeitura de Joinville", color: "bg-orange-600", icon: "📝", click: "setScreen('ouvidoria')" },
-                { label: "Acessar o APP PMSC Cidadão da Polícia Militar - Fazer Denúncias", color: "bg-emerald-600", icon: "👮", click: "abrirPMSC()" },
+                { label: "APP PMSC Cidadão da Polícia Militar - Fazer Denúncias", color: "bg-emerald-600", icon: "👮", click: "abrirPMSC()" },
                 { label: "Registrar Boletim de Ocorrência (B.O.) na Polícia Civil - Fazer Denúncias", color: "bg-red-600", icon: "📑", click: "window.open('https://delegaciavirtual.sc.gov.br/')" },
                 { label: "Polícia Científica (Obter IDENTIDADE)", color: "bg-slate-600", icon: "🆔", click: "window.open('https://www.policiacientifica.sc.gov.br/', '_blank')" },
-                { label: "Corpo de Bombeiros Militar", color: "bg-red-700", icon: "🚒", click: "abrirBombeiros()" },
-                { label: "SINESP Cidadão (Consultar veículo pela placa)", color: "bg-yellow-600", icon: "🚗", click: "abrirSinesp()" },
+                { label: "APP Corpo de Bombeiros Militar", color: "bg-red-700", icon: "🚒", click: "abrirBombeiros()" },
+                { label: "APP SINESP Cidadão (Consultar veículo pela placa)", color: "bg-yellow-600", icon: "🚗", click: "abrirSinesp()" },
                 { label: "DETRAN SC", color: "bg-blue-900", icon: "🚗", click: "window.open('https://www.detran.sc.gov.br/', '_blank')" },
                 { label: "ÁGUAS DE JOINVILLE", color: "bg-sky-600", icon: "💧", click: "window.open('https://www.aguasdejoinville.com.br/', '_blank')" },
-                { label: "CELESC (Energia Elétrica)", color: "bg-amber-900", icon: "⚡", click: "abrirCelesc()" },
+                { label: "APP CELESC (Energia Elétrica)", color: "bg-amber-900", icon: "⚡", click: "abrirCelesc()" },
                 { label: "Telefones de EMERGÊNCIA", color: "bg-rose-600", icon: "🚨", click: "setScreen('emergencia')" },
                 { label: "Telefones de SERVIÇOS", color: "bg-teal-600", icon: "🛠️", click: "setScreen('servicos')" },
                 { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
@@ -848,7 +850,7 @@ function abrirBombeiros() {
             return `
                 <div class="p-5 bg-gray-50 dark:bg-gray-700 rounded-2xl border border-dashed border-gray-300 space-y-4">
                     <p class="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Filtros de Busca Avançada</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Status</label>
                             <select onchange="state.filterStatus = this.value; render();" class="w-full p-2 border rounded-lg font-bold text-[28px] dark:bg-gray-600 admin-filter-input no-elderly">
@@ -873,6 +875,14 @@ function abrirBombeiros() {
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Período Até</label>
                             <input type="date" value="${state.filterPeriodEnd}" onchange="state.filterPeriodEnd = this.value; render();" class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label class="text-[10px] font-bold text-gray-500 uppercase">Nº Processo</label>
+                            <input type="text" value="${state.filterProcessNumber}" 
+                                onkeydown="window.handleProcessNumberKeydown(event)"
+                                oninput="window.handleProcessNumberInput(this, event); state.filterProcessNumber = this.value; render();" 
+                                placeholder="99.9.999999-9" 
+                                class="w-full p-2 border rounded-lg text-sm dark:bg-gray-600 admin-filter-input no-elderly">
                         </div>
                     </div>
                 </div>
@@ -1719,6 +1729,9 @@ function abrirBombeiros() {
             if (state.filterPeriodEnd) {
                 const end = new Date(state.filterPeriodEnd + 'T23:59:59').getTime();
                 filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
+            }
+            if (state.filterProcessNumber) {
+                filtered = filtered.filter(r => String(r.processNumber || '').includes(state.filterProcessNumber));
             }
 
             filtered.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
