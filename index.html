@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260327_0002"; // Timestamp da Versão
+            const APP_VERSION = "20260327_0003"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -533,6 +533,12 @@
 
         function render() {
             const root = document.getElementById('root');
+            
+            // Preservar foco e posição do cursor antes de renderizar
+            const activeId = document.activeElement ? document.activeElement.id : null;
+            const selectionStart = document.activeElement ? document.activeElement.selectionStart : null;
+            const selectionEnd = document.activeElement ? document.activeElement.selectionEnd : null;
+
             const dateStr = state.currentTime.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             const timeStr = state.currentTime.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
             const formattedDate = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
@@ -558,6 +564,17 @@
             `;
 
             root.innerHTML = content;
+
+            // Restaurar foco e posição do cursor após renderizar
+            if (activeId) {
+                const el = document.getElementById(activeId);
+                if (el) {
+                    el.focus();
+                    if (selectionStart !== null && selectionEnd !== null && (el.type === 'text' || el.type === 'search' || el.type === 'tel' || el.type === 'url' || el.type === 'password')) {
+                        try { el.setSelectionRange(selectionStart, selectionEnd); } catch(e) {}
+                    }
+                }
+            }
         }
 
         function renderScreen() {
@@ -878,7 +895,7 @@ function abrirBombeiros() {
                         </div>
                         <div class="flex flex-col gap-1">
                             <label class="text-[10px] font-bold text-gray-500 uppercase">Nº Processo</label>
-                            <input type="text" value="${state.filterProcessNumber}" 
+                            <input type="text" id="admin-filter-process-number" value="${state.filterProcessNumber}" 
                                 onkeydown="window.handleProcessNumberKeydown(event)"
                                 oninput="window.handleProcessNumberInput(this, event); state.filterProcessNumber = this.value; render();" 
                                 placeholder="99.9.999999-9" 
@@ -1731,7 +1748,10 @@ function abrirBombeiros() {
                 filtered = filtered.filter(r => new Date(r.createdAt).getTime() <= end);
             }
             if (state.filterProcessNumber) {
-                filtered = filtered.filter(r => String(r.processNumber || '').includes(state.filterProcessNumber));
+                const digits = state.filterProcessNumber.replace(/\D/g, '');
+                if (digits.length === 10) {
+                    filtered = filtered.filter(r => String(r.processNumber || '').includes(state.filterProcessNumber));
+                }
             }
 
             filtered.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
