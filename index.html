@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260327_0003"; // Timestamp da Versão
+            const APP_VERSION = "20260329_0001"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -1404,7 +1404,7 @@ function abrirBombeiros() {
                 `;
             } else {
                 container.innerHTML = `
-                    <p class="text-center font-bold text-gray-500 py-4 animate-fade-in">Informe seu nome e senha para buscar ou incluir registros. A senha deve obrigatoriamente começar com 3 (três) LETRAS seguidas por 6 (seis) NÚMEROS.</p>
+                    <p class="text-center font-bold text-gray-500 py-4 animate-fade-in">Informe seu PRIMEIRO NOME e a CHAVE para buscar ou incluir registros. A CHAVE deve obrigatoriamente começar com 3 (três) LETRAS seguidas por 6 (seis) NÚMEROS.</p>
                     <button onclick="setScreen('home')" class="bg-gray-500 text-white p-5 rounded-xl font-bold w-full">Voltar</button>
                 `;
             }
@@ -1420,7 +1420,7 @@ function abrirBombeiros() {
                         <input type='text' id='ouv-nome' value="${state.ouvidoriaUser || ''}" oninput='this.value = this.value.toUpperCase().substring(0,15); state.ouvidoriaUser = this.value; updateOuvidoriaButtons();' class='w-full p-4 border rounded-xl font-bold' placeholder='Seu primeiro nome' required>
                     </div>
                     <div class="space-y-1">
-                        <label class="text-xs font-bold text-gray-400 uppercase">Sua senha neste APP</label>
+                        <label class="text-xs font-bold text-gray-400 uppercase">Minha CHAVE</label>
                         <input type="text" id="ouv-pass" value="${state.ouvidoriaPass || ''}" oninput="let v = this.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase(); if (v.length > 3) { v = v.substring(0,3) + '-' + v.substring(3,9); } this.value = v; state.ouvidoriaPass = v; updateOuvidoriaButtons();" maxlength="10" placeholder="ABC-123456" class="w-full p-4 border rounded-xl font-bold" required>
                     </div>
                     <div id="ouvidoria-actions">
@@ -1431,7 +1431,7 @@ function abrirBombeiros() {
                                 <button onclick="setScreen('home')" class="bg-gray-500 text-white p-5 rounded-xl font-bold">Voltar</button>
                             </div>
                         ` : `
-                            <p class="text-center font-bold text-gray-500 py-4">Informe seu nome e senha para buscar ou incluir registros.</p>
+                            <p class="text-center font-bold text-gray-500 py-4">Informe seu PRIMEIRO NOME e sua CHAVE para buscar ou incluir registros.</p>
                             <button onclick="setScreen('home')" class="bg-gray-500 text-white p-5 rounded-xl font-bold w-full">Voltar</button>
                         `}
                     </div>
