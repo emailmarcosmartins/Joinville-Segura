@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260329_0001"; // Timestamp da Versão
+            const APP_VERSION = "20260405_0001"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -611,9 +611,11 @@
                 { label: "Polícia Científica (Obter IDENTIDADE)", color: "bg-slate-600", icon: "🆔", click: "window.open('https://www.policiacientifica.sc.gov.br/', '_blank')" },
                 { label: "APP Corpo de Bombeiros Militar", color: "bg-red-700", icon: "🚒", click: "abrirBombeiros()" },
                 { label: "APP SINESP Cidadão (Consultar veículo pela placa)", color: "bg-yellow-600", icon: "🚗", click: "abrirSinesp()" },
-                { label: "DETRAN SC", color: "bg-blue-900", icon: "🚗", click: "window.open('https://www.detran.sc.gov.br/', '_blank')" },
+                { label: "Polícia Rodoviária Federal - Acidente sem vítimas", color: "bg-blue-700", icon: "🚗", click: "window.open('https://comunicante.prf.gov.br/declarante/declaracao', '_blank')" },
+                { label: "Defesa Civil SC", color: "bg-blue-600", icon: "🚗", click: "window.open('https://www.defesacivil.sc.gov.br/', '_blank')" },
+                { label: "Detran SC", color: "bg-blue-900", icon: "🚗", click: "window.open('https://www.detran.sc.gov.br/', '_blank')" },
                 { label: "ÁGUAS DE JOINVILLE", color: "bg-sky-600", icon: "💧", click: "window.open('https://www.aguasdejoinville.com.br/', '_blank')" },
-                { label: "APP CELESC (Energia Elétrica)", color: "bg-amber-900", icon: "⚡", click: "abrirCelesc()" },
+                { label: "APP CELESC", color: "bg-amber-900", icon: "⚡", click: "abrirCelesc()" },
                 { label: "Telefones de EMERGÊNCIA", color: "bg-rose-600", icon: "🚨", click: "setScreen('emergencia')" },
                 { label: "Telefones de SERVIÇOS", color: "bg-teal-600", icon: "🛠️", click: "setScreen('servicos')" },
                 { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
@@ -1341,8 +1343,10 @@ function abrirBombeiros() {
                 { label: "Ligar para o 193 - Corpo de Bombeiros", val: "193", color: "bg-orange-600" },
                 { label: "Ligar para o 153 - Guarda Municipal", val: "153", color: "bg-blue-800" },
                 { label: "Ligar para o 181 - Polícia Civil", val: "181", color: "bg-slate-700" },
+                { label: "Ligar para o 191 - Polícia Rodoviária Federal - PRF", val: "191", color: "bg-cyan-900" },
+                { label: "Ligar para a Polícia Militar Rodoviária - CPMRv", val: "4734511768", color: "bg-cyan-700" },
                 { label: "Ligar para o 115 - Águas de Joinville", val: "115", color: "bg-cyan-600" },
-                { label: "Ligar para o 0800 48 0196 - CELESC", val: "0800480196", color: "bg-yellow-600" },
+                { label: "Ligar para o 0800 o48 0196 - CELESC", val: "0800o480196", color: "bg-yellow-600" },
                 { label: "Ligar para o 100 - Denunciar violência contra CRIANÇAS, ADOLESCENTES e IDOSOS", val: "100", color: "bg-purple-600" },
                 { label: "Ligar para o 180 - Denunciar violência contra a MULHER", val: "180", color: "bg-rose-600" },
                 { label: "Ligar para o 188 - Prevenção ao suicídio – CVV", val: "188", color: "bg-teal-600" }
