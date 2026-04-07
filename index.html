@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260406_0004"; // Timestamp da Versão
+            const APP_VERSION = "20260407_0001"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -253,19 +253,48 @@
             }
         };
 
-        function openGoogleMaps() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((pos) => {
-                    const lat = pos.coords.latitude;
-                    const lng = pos.coords.longitude;
-                    window.open(`https://www.google.com/maps?q=${lat},${lng}`);
-                }, (err) => {
-                    alert("Erro ao obter localização: " + err.message);
-                });
+async function openGoogleMaps() {
+    if (!navigator.geolocation) {
+        alert("Geolocalização não é suportada por este navegador.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        try {
+            // 🌍 Usando OpenStreetMap (Nominatim)
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+            );
+
+            const data = await response.json();
+
+            if (data && data.display_name) {
+                let endereco = data.display_name;
+
+                // 📋 Copiar para área de transferência
+                await navigator.clipboard.writeText(endereco);
+
+                alert("Seu endereço atual é:\n" + endereco);
+
+                // 📍 Abrir no Google Maps
+                window.open(`https://www.google.com/maps?q=${lat},${lng}`);
+
             } else {
-                alert("Geolocalização não é suportada por este navegador.");
+                alert("Não foi possível obter o endereço.");
             }
+
+        } catch (error) {
+            alert("Erro ao buscar endereço: " + error.message);
         }
+
+    }, (err) => {
+        alert("Erro ao obter localização: " + err.message);
+    });
+}
+
 
         function sendWhatsAppMessage() {
             const el = document.getElementById('wa-number');
