@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260406_0007"; // Timestamp da Versão
+            const APP_VERSION = "20260407_0000"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -276,7 +276,7 @@ async function openGoogleMaps() {
             await copiarTextoSeguro(endereco);
 
             // ⚠️ MOSTRA E ESPERA O OK DO USUÁRIO
-            const confirmar = confirm("Você está no seguinte endereço:\n\n" + endereco + "\n\nDeseja abrir no Google Maps?");
+            const confirmar = confirm("Você está no seguinte endereço:\n\n (já copiei para a área de transferência)\n\n" + endereco + "\n\nDeseja abrir no Google Maps?");
 
             // 📍 Só abre depois do OK
             if (confirmar) {
