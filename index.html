@@ -324,6 +324,20 @@ async function copiarTextoSeguro(texto) {
     document.body.removeChild(textarea);
 }
 
+async function handlePasteToSubject() {
+    try {
+        const text = await navigator.clipboard.readText();
+        const textarea = document.getElementById('form-subject');
+        if (textarea) {
+            textarea.value += text;
+            textarea.focus();
+        }
+    } catch (err) {
+        // Fallback para navegadores que não suportam navigator.clipboard.readText() ou permissão negada
+        alert("Não foi possível colar automaticamente. Por favor, use o comando de colar do seu teclado ou celular (Ctrl+V ou Pressionar e Colar).");
+    }
+}
+
 
         function sendWhatsAppMessage() {
             const el = document.getElementById('wa-number');
@@ -1641,6 +1655,9 @@ function abrirBombeiros() {
                         <div>
                             <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Assunto / Descrição</label>
                             <textarea id="form-subject" placeholder="Descreva o que aconteceu..." class="w-full p-4 border rounded-xl font-bold dark:bg-gray-700 h-32">${registroParaEditar ? registroParaEditar.subject : ''}</textarea>
+                            <button onclick="handlePasteToSubject()" class="mt-2 w-full p-3 bg-blue-500 text-white rounded-xl font-bold text-sm shadow hover:bg-blue-600 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                📋 COLAR DA ÁREA DE TRANSFERÊNCIA
+                            </button>
                         </div>
                         <button onclick="handleSaveNewRegistration(event)" class="w-full p-5 bg-green-600 text-white rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95">Salvar Registro</button>
                         <button onclick="state.ouvidoriaView = 'list'; registroParaEditar = null; state.ouvidoriaEditingId = null; render();" class="w-full p-4 bg-gray-500 text-white rounded-xl font-bold">Cancelar</button>
