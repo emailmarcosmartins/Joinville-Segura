@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0012"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0013"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -125,16 +125,16 @@
             <h2 class="text-2xl font-bold text-primary dark:text-blue-400 uppercase text-center">Localizar Serviço</h2>
             <p class="text-sm font-bold text-gray-500 dark:text-gray-400 text-center uppercase">Escolha uma categoria abaixo:</p>
             <div class="flex flex-col gap-4">
-                <button onclick="findVeicularService('GUINCHO')" class="bg-amber-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                <button onclick="findVeicularService('GUINCHOS')" class="bg-amber-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
                     <span class="text-2xl">🛻</span> GUINCHOS
                 </button>
-                <button onclick="findVeicularService('MECANICA')" class="bg-blue-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                <button onclick="findVeicularService('MECANICAS')" class="bg-blue-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
                     <span class="text-2xl">🔧</span> MECÂNICAS
                 </button>
-                <button onclick="findVeicularService('AUTOELETRICA')" class="bg-teal-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                <button onclick="findVeicularService('AUTOELETRICAS')" class="bg-teal-600 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
                     <span class="text-2xl">⚡</span> AUTOELÉTRICAS
                 </button>
-                <button onclick="findVeicularService('BORRACHARIA')" class="bg-slate-700 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
+                <button onclick="findVeicularService('BORRACHARIAS')" class="bg-slate-700 text-white p-5 rounded-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-transform">
                     <span class="text-2xl">🛞</span> BORRACHARIAS
                 </button>
                 <button onclick="closeServiceSelectionModal()" class="bg-gray-500 text-white p-4 rounded-xl font-bold text-lg mt-2">Sair / Cancelar</button>
@@ -372,10 +372,10 @@ function closeServiceSelectionModal() {
 function findVeicularService(type) {
     let query = "";
     switch(type) {
-        case 'GUINCHO': query = "Localize GUINCHOS 24 horas próximos a mim"; break;
-        case 'MECANICA': query = "Localize MECÂNICAS 24 horas próximas a mim"; break;
-        case 'AUTOELETRICA': query = "Localize AUTOELÉTRICAS 24 horas próximas a mim"; break;
-        case 'BORRACHARIA': query = "Localize BORRACHARIAS 24 horas próximas a mim"; break;
+        case 'GUINCHOS': query = "Localize GUINCHOS 24 horas próximos a mim"; break;
+        case 'MECANICAS': query = "Localize MECÂNICAS 24 horas próximas a mim"; break;
+        case 'AUTOELETRICAS': query = "Localize AUTOELÉTRICAS 24 horas próximas a mim"; break;
+        case 'BORRACHARIAS': query = "Localize BORRACHARIAS 24 horas próximas a mim"; break;
     }
     if (query) {
         window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
@@ -738,7 +738,7 @@ function findVeicularService(type) {
                 { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
                 { label: "Inteligência Artificial ChatGPT (pergunte qualquer coisa)", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" },
                 { label: "Descobrir minha Localização aproximada", color: "bg-lime-600", icon: "📍", click: "openGoogleMaps()" },
-                { label: "Localizar GUINCHO, MECÂNICO, AUTOELÉTRICA ou BORRACHARIA - 24 horas", color: "bg-amber-600", icon: "🛠️", click: "openServiceSelectionModal()" },
+                { label: "Localizar GUINCHOS, MECÂNICAS, AUTOELÉTRICAS ou BORRACHARIAS - 24 horas", color: "bg-amber-600", icon: "🛠️", click: "openServiceSelectionModal()" },
                 { label: "Enviar mensagem para um número WhatsApp", color: "bg-green-500", icon: "💬", click: "sendWhatsAppMessage()" }
             );
 
