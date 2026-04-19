@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260407_0001"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0001"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -338,6 +338,94 @@ async function handlePasteToSubject() {
     }
 }
 
+async function fetchVeicularServices() {
+    if (!navigator.geolocation) {
+        alert("Geolocalização não suportada.");
+        setScreen('home');
+        return;
+    }
+
+    state.veicularLoading = true;
+    render();
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        state.userCoords = { lat, lon };
+
+        try {
+            const [guincho, mecanico, borracharia] = await Promise.all([
+                searchOsm(lat, lon, 'guincho'),
+                searchOsm(lat, lon, 'mecanica'),
+                searchOsm(lat, lon, 'borracharia')
+            ]);
+
+            state.veicularResults = {
+                guincho: processOsmResults(guincho, lat, lon),
+                mecanico: processOsmResults(mecanico, lat, lon),
+                borracharia: processOsmResults(borracharia, lat, lon)
+            };
+
+            state.veicularLoading = false;
+            render();
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao buscar serviços veiculares próximos.");
+            state.veicularLoading = false;
+            setScreen('home');
+        }
+    }, (err) => {
+        alert("Erro ao obter sua localização: " + err.message);
+        state.veicularLoading = false;
+        setScreen('home');
+    });
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+async function searchOsm(lat, lon, query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=20`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Falha na busca OSM");
+    return await res.json();
+}
+
+function processOsmResults(results, userLat, userLon) {
+    return results
+        .map(r => {
+            const dist = calculateDistance(userLat, userLon, parseFloat(r.lat), parseFloat(r.lon));
+            return {
+                name: r.display_name.split(',')[0],
+                address: r.address ? (r.address.road || r.display_name.split(',').slice(1,3).join(',')) : r.display_name,
+                lat: r.lat,
+                lon: r.lon,
+                distance: dist,
+                phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
+            };
+        })
+        .filter(r => r.distance <= 5)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 3);
+}
+
+function openRoute(destLat, destLon) {
+    if (state.userCoords) {
+        const url = `https://www.google.com/maps/dir/?api=1&origin=${state.userCoords.lat},${state.userCoords.lon}&destination=${destLat},${destLon}&travelmode=driving`;
+        window.open(url, '_blank');
+    } else {
+        window.open(`https://www.google.com/maps?q=${destLat},${destLon}`, '_blank');
+    }
+}
+
 
         function sendWhatsAppMessage() {
             const el = document.getElementById('wa-number');
@@ -413,7 +501,10 @@ async function handlePasteToSubject() {
             adminAttempts: 0,
             presidentAttempts: 0,
             adminPasswordSecret: null,
-            agendaConsegId: ''
+            agendaConsegId: '',
+            veicularResults: { guincho: [], mecanico: [], borracharia: [] },
+            veicularLoading: false,
+            userCoords: null
         };
 
         // Capturar evento de instalação PWA
@@ -566,6 +657,11 @@ async function handlePasteToSubject() {
             state.presidentView = 'login'; 
             state.filterStatus = 'Todos'; // Resetar filtros ao trocar de tela principal
             state.filterProcessNumber = '';
+
+            if (scr === 'veicular') {
+                fetchVeicularServices();
+            }
+
             render(); 
             
             // Forçar o scroll para o topo de forma imediata e agressiva
@@ -655,6 +751,7 @@ async function handlePasteToSubject() {
                 case 'ouvidoria': return renderOuvidoria();
                 case 'emergencia': return renderEmergencia();
                 case 'servicos': return renderServicos();
+                case 'veicular': return renderVeicular();
                 case 'agenda': return renderAgenda();
                 case 'admin': return renderAdmin();
                 case 'president': return renderPresident();
@@ -684,7 +781,7 @@ async function handlePasteToSubject() {
                 { label: "APP Corpo de Bombeiros Militar", color: "bg-red-700", icon: "🚒", click: "abrirBombeiros()" },
                 { label: "APP SINESP Cidadão (Consultar veículo pela placa)", color: "bg-yellow-600", icon: "🚗", click: "abrirSinesp()" },
                 { label: "Polícia Rodoviária Federal - Acidente sem vítimas", color: "bg-blue-700", icon: "🚔", click: "window.open('https://comunicante.prf.gov.br/declarante/declaracao', '_blank')" },
-                { label: "Defesa Civil SC", color: "bg-blue-600", icon: "🛡️", click: "window.open('https://www.defesacivil.sc.gov.br/', '_blank')" },
+                { label: "Defesa Civil SC", color: "bg-emerald-800", icon: "🛡️", click: "window.open('https://www.defesacivil.sc.gov.br/', '_blank')" },
                 { label: "Detran SC", color: "bg-blue-900", icon: "🪪", click: "window.open('https://www.detran.sc.gov.br/', '_blank')" },
                 { label: "ÁGUAS DE JOINVILLE", color: "bg-sky-600", icon: "💧", click: "window.open('https://www.aguasdejoinville.com.br/', '_blank')" },
                 { label: "APP CELESC", color: "bg-amber-900", icon: "⚡", click: "abrirCelesc()" },
@@ -693,6 +790,7 @@ async function handlePasteToSubject() {
                 { label: "Agenda do CONSEG", color: "bg-purple-600", icon: "📅", click: "setScreen('agenda')" },
                 { label: "Inteligência Artificial ChatGPT (pergunte qualquer coisa)", color: "bg-cyan-600", icon: "🤖", click: "window.open('https://chatgpt.com/')" },
                 { label: "Descobrir minha Localização aproximada", color: "bg-lime-600", icon: "📍", click: "openGoogleMaps()" },
+                { label: "Localizar GUINCHO, MECÂNICO ou BORRACHARIA - 24 horas", color: "bg-amber-600", icon: "🛠️", click: "setScreen('veicular')" },
                 { label: "Enviar mensagem para um número WhatsApp", color: "bg-green-500", icon: "💬", click: "sendWhatsAppMessage()" }
             );
 
@@ -1415,14 +1513,15 @@ function abrirBombeiros() {
                 { label: "Ligar para o 193 - Corpo de Bombeiros", val: "193", color: "bg-orange-600" },
                 { label: "Ligar para o 153 - Guarda Municipal", val: "153", color: "bg-blue-800" },
                 { label: "Ligar para o 181 - Polícia Civil", val: "181", color: "bg-slate-700" },
-                { label: "Ligar para o 191 - Polícia Rodoviária Federal - PRF", val: "191", color: "bg-cyan-900" },
+                { label: "Ligar para o 191 - Polícia Rodoviária Federal - PRF (BR-101 e BR-280)", val: "191", color: "bg-cyan-900" },
+                { label: "Ligar para o 0800 725 1771 - Auto Pista Litoral Sul - (BR 101)", val: "08007251771", color: "bg-slate-500" },
+                { label: "Ligar para a 198 - Polícia Rodoviária Estadual - PRE/PMRv - Todas com a Sigla SC", val: "198", color: "bg-cyan-700" },
                 { label: "Ligar para o 100 - Denunciar violência contra CRIANÇAS, ADOLESCENTES e IDOSOS - Conselho Tutelar", val: "100", color: "bg-purple-600" },
                 { label: "Ligar para o 180 - Denunciar violência contra a MULHER", val: "180", color: "bg-rose-600" },
                 { label: "Ligar para o 188 - Prevenção ao suicídio – CVV", val: "188", color: "bg-teal-600" },
                 { label: "Ligar para o 115 - Águas de Joinville", val: "115", color: "bg-cyan-600" },
                 { label: "Ligar para o 0800 048 0196 - CELESC", val: "08000480196", color: "bg-yellow-600" },
                 { label: "Ligar para a Centro POP - 24 horas - Pessoas em situação de rua", val: "47991413439", color: "bg-cyan-950" },
-                { label: "Ligar para a Polícia Militar Rodoviária - CPMRv", val: "4734511768", color: "bg-cyan-700" },
                 { label: "Ligar para a Polícia Militar Ambiental", val: "4734318784", color: "bg-cyan-400" }
             ];
 
@@ -1459,6 +1558,66 @@ function abrirBombeiros() {
                         </button>
                     `).join('')}
                     <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold text-lg mt-6 shadow-lg">Voltar ao Menu</button>
+                </div>
+            `;
+        }
+
+        function renderVeicular() {
+            if (state.veicularLoading) {
+                return `
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-6 animate-fade-in text-center py-20">
+                        <div class="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <h2 class="text-2xl font-bold text-gray-700 dark:text-white">Localizando serviços próximos...</h2>
+                        <p class="text-gray-500 dark:text-gray-400">Buscando empresas a até 5KM de sua localização atual.</p>
+                    </div>
+                `;
+            }
+
+            const categories = [
+                { title: "🛻 GUINCHO (até 3 empresas)", key: "guincho" },
+                { title: "🔧 MECÂNICO (até 3 empresas)", key: "mecanico" },
+                { title: "🛞 BORRACHARIA (até 3 empresas)", key: "borracharia" }
+            ];
+
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl space-y-8 animate-fade-in">
+                    <h2 class="text-3xl font-bold text-amber-600 mb-6 flex items-center gap-2 text-center uppercase">Serviços Veiculares 24h</h2>
+                    
+                    ${categories.map(cat => `
+                        <div class="space-y-4">
+                            <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 border-b-2 border-amber-200 pb-2 uppercase">${cat.title}</h3>
+                            <div class="space-y-3">
+                                ${state.veicularResults[cat.key].length === 0 
+                                    ? `<p class="italic text-gray-400 py-2">Nenhum serviço encontrado em 5KM.</p>` 
+                                    : state.veicularResults[cat.key].map(item => `
+                                        <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border border-gray-100 dark:border-gray-600">
+                                            <div class="flex-1">
+                                                <p class="font-black text-lg text-primary dark:text-blue-300 leading-tight">${item.name}</p>
+                                                <p class="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase truncate max-w-[250px] md:max-w-none" title="${item.address}">${item.address}</p>
+                                                <p class="text-[10px] text-amber-600 font-bold uppercase mt-1">Distância: ${item.distance.toFixed(2)} KM</p>
+                                            </div>
+                                            <div class="flex gap-2 w-full md:w-auto">
+                                                <button onclick="window.open('tel:${item.phone}', '_self')" 
+                                                    class="flex-1 md:flex-none bg-green-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center gap-2 hover:bg-green-700 transition-colors ${!item.phone ? 'opacity-40 cursor-not-allowed' : ''}"
+                                                    ${!item.phone ? 'onclick="alert(\'Telefone não cadastrado para esta empresa.\'); return false;"' : ''}>
+                                                    📞 LIGAR
+                                                </button>
+                                                <button onclick="openRoute('${item.lat}', '${item.lon}')" 
+                                                    class="flex-1 md:flex-none bg-blue-600 text-white px-4 py-3 rounded-xl font-bold text-sm shadow flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors">
+                                                    📍 ROTA
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-[10px] font-bold text-blue-800 dark:text-blue-300 italic">
+                        Nota: Os dados são obtidos do OpenStreetMap e podem não representar todas as empresas da região. Recomendamos verificar a disponibilidade por telefone.
+                    </div>
+
+                    <button onclick="setScreen('home')" class="w-full p-5 bg-gray-500 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-gray-600 transition-colors mt-4 uppercase">Voltar ao Menu Principal</button>
                 </div>
             `;
         }
