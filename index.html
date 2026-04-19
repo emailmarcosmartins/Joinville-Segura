@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0004"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0005"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -354,12 +354,39 @@ async function fetchVeicularServices() {
         state.userCoords = { lat, lon };
 
         try {
-            // Busca expandida com termos técnicos que o OSM reconhece melhor
             const [guincho, mecanico, borracharia] = await Promise.all([
-                searchOsm(lat, lon, 'guincho towing "auto rescue"'),
-                searchOsm(lat, lon, 'oficina mecanica "car repair"'),
-                searchOsm(lat, lon, 'borracharia "tyres repair" tyre')
+                searchOsm(lat, lon, 'guincho'),
+                searchOsm(lat, lon, 'mecanico'),
+                searchOsm(lat, lon, 'borracharia')
             ]);
+
+            state.veicularResults = {
+                guincho: processOsmResults(guincho, lat, lon),
+                mecanico: processOsmResults(mecanico, lat, lon),
+                borracharia: processOsmResults(borracharia, lat, lon)
+            };
+
+            // 🔥 fallback inteligente para guincho
+            if (state.veicularResults.guincho.length === 0) {
+                console.warn("Nenhum guincho encontrado via OSM");
+            }
+
+            state.veicularLoading = false;
+            render();
+
+        } catch (e) {
+            console.error(e);
+            alert("Erro ao buscar serviços.");
+            state.veicularLoading = false;
+            setScreen('home');
+        }
+
+    }, (err) => {
+        alert("Erro ao obter localização: " + err.message);
+        state.veicularLoading = false;
+        setScreen('home');
+    });
+}
 
             state.veicularResults = {
                 guincho: processOsmResults(guincho, lat, lon),
@@ -393,30 +420,66 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-async function searchOsm(lat, lon, query) {
-    // Aumentado o limite para 50 para encontrar mais opções na região de Joinville
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=50`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("Falha na busca OSM");
-    return await res.json();
+async function searchOsm(lat, lon, type) {
+
+    const queries = {
+        guincho: `
+            [out:json][timeout:25];
+            (
+              node["amenity"="car_repair"](around:8000,${lat},${lon});
+              node["shop"="car_repair"](around:8000,${lat},${lon});
+              node["shop"="tyres"](around:8000,${lat},${lon});
+            );
+            out;
+        `,
+        mecanico: `
+            [out:json][timeout:25];
+            (
+              node["shop"="car_repair"](around:8000,${lat},${lon});
+            );
+            out;
+        `,
+        borracharia: `
+            [out:json][timeout:25];
+            (
+              node["shop"="tyres"](around:8000,${lat},${lon});
+            );
+            out;
+        `
+    };
+
+    const url = "https://overpass-api.de/api/interpreter";
+
+    const res = await fetch(url, {
+        method: "POST",
+        body: queries[type]
+    });
+
+    if (!res.ok) throw new Error("Erro Overpass");
+
+    const data = await res.json();
+    return data.elements;
 }
 
 function processOsmResults(results, userLat, userLon) {
     return results
         .map(r => {
-            const dist = calculateDistance(userLat, userLon, parseFloat(r.lat), parseFloat(r.lon));
+            const lat = r.lat;
+            const lon = r.lon;
+
+            const dist = calculateDistance(userLat, userLon, lat, lon);
+
             return {
-                name: r.display_name.split(','),
-                address: r.address ? (r.address.road || r.display_name.split(',').slice(1,3).join(',')) : r.display_name,
-                lat: r.lat,
-                lon: r.lon,
+                name: r.tags?.name || "Serviço automotivo",
+                address: r.tags?.["addr:street"] || "Endereço não informado",
+                lat,
+                lon,
                 distance: dist,
-                phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
+                phone: r.tags?.phone || r.tags?.["contact:phone"] || ''
             };
         })
-        // REMOVIDO: .filter(r => r.distance <= 5) -> Agora não há limite de distância
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10); // Exibe os 10 mais próximos, não importa a distância
+        .slice(0, 10);
 }
 
 function openRoute(destLat, destLon) {
