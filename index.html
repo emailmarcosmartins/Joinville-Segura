@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0003"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0004"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -354,9 +354,9 @@ async function fetchVeicularServices() {
         state.userCoords = { lat, lon };
 
         try {
-            // Busca expandida com termos técnicos para maior precisão em Joinville
+            // Busca expandida com termos técnicos que o OSM reconhece melhor
             const [guincho, mecanico, borracharia] = await Promise.all([
-                searchOsm(lat, lon, 'guincho "auto rescue" towing'),
+                searchOsm(lat, lon, 'guincho towing "auto rescue"'),
                 searchOsm(lat, lon, 'oficina mecanica "car repair"'),
                 searchOsm(lat, lon, 'borracharia "tyres repair" tyre')
             ]);
@@ -371,12 +371,12 @@ async function fetchVeicularServices() {
             render();
         } catch (e) {
             console.error(e);
-            alert("Erro ao buscar serviços veiculares próximos.");
+            alert("Erro ao buscar serviços veiculares.");
             state.veicularLoading = false;
             setScreen('home');
         }
     }, (err) => {
-        alert("Erro ao obter sua localização: " + err.message);
+        alert("Erro ao obter localização: " + err.message);
         state.veicularLoading = false;
         setScreen('home');
     });
@@ -394,8 +394,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 async function searchOsm(lat, lon, query) {
-    // Adicionado o parâmetro de visualização limitada à região para aumentar a precisão
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=30`;
+    // Aumentado o limite para 50 para encontrar mais opções na região de Joinville
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=50`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("Falha na busca OSM");
     return await res.json();
@@ -414,10 +414,9 @@ function processOsmResults(results, userLat, userLon) {
                 phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
             };
         })
-        // Aumentado o raio de 5km para 20km para abranger Joinville
-        .filter(r => r.distance <= 20)
+        // REMOVIDO: .filter(r => r.distance <= 5) -> Agora não há limite de distância
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10); // Exibe até os 10 mais próximos
+        .slice(0, 10); // Exibe os 10 mais próximos, não importa a distância
 }
 
 function openRoute(destLat, destLon) {
