@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0006"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0007"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -356,7 +356,7 @@ async function fetchVeicularServices() {
         try {
             const [guincho, mecanico, borracharia] = await Promise.all([
                 searchOsm(lat, lon, 'guincho'),
-                searchOsm(lat, lon, 'mecanico'),
+                searchOsm(lat, lon, 'mecanica'),
                 searchOsm(lat, lon, 'borracharia')
             ]);
 
@@ -366,44 +366,16 @@ async function fetchVeicularServices() {
                 borracharia: processOsmResults(borracharia, lat, lon)
             };
 
-            // 🔥 fallback inteligente para guincho
-            if (state.veicularResults.guincho.length === 0) {
-                console.warn("Nenhum guincho encontrado via OSM");
-            }
-
-            state.veicularLoading = false;
-            render();
-
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao buscar serviços.");
-            state.veicularLoading = false;
-            setScreen('home');
-        }
-
-    }, (err) => {
-        alert("Erro ao obter localização: " + err.message);
-        state.veicularLoading = false;
-        setScreen('home');
-    });
-}
-
-            state.veicularResults = {
-                guincho: processOsmResults(guincho, lat, lon),
-                mecanico: processOsmResults(mecanico, lat, lon),
-                borracharia: processOsmResults(borracharia, lat, lon)
-            };
-
             state.veicularLoading = false;
             render();
         } catch (e) {
             console.error(e);
-            alert("Erro ao buscar serviços veiculares.");
+            alert("Erro ao buscar serviços veiculares próximos.");
             state.veicularLoading = false;
             setScreen('home');
         }
     }, (err) => {
-        alert("Erro ao obter localização: " + err.message);
+        alert("Erro ao obter sua localização: " + err.message);
         state.veicularLoading = false;
         setScreen('home');
     });
@@ -420,91 +392,38 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-async function searchOsm(lat, lon, type) {
-    const radius = 5000; // 5km de raio
-    
-    const queries = {
-        guincho: `
-            [out:json][timeout:25];
-            (
-              node["shop"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
-              node["amenity"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
-              node["shop"="towing"](around:${radius},${lat},${lon});
-              node["amenity"="towing"](around:${radius},${lat},${lon});
-              way["shop"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
-              way["amenity"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
-            );
-            out center;
-        `,
-        mecanico: `
-            [out:json][timeout:25];
-            (
-              node["shop"="car_repair"](around:${radius},${lat},${lon});
-              node["amenity"="car_repair"](around:${radius},${lat},${lon});
-              node["craft"="car_repair"](around:${radius},${lat},${lon});
-              way["shop"="car_repair"](around:${radius},${lat},${lon});
-              way["amenity"="car_repair"](around:${radius},${lat},${lon});
-            );
-            out center;
-        `,
-        borracharia: `
-            [out:json][timeout:25];
-            (
-              node["shop"="tyres"](around:${radius},${lat},${lon});
-              node["shop"="tire"](around:${radius},${lat},${lon});
-              node["shop"="car_repair"]["service:tyres"="yes"](around:${radius},${lat},${lon});
-              way["shop"="tyres"](around:${radius},${lat},${lon});
-              way["shop"="tire"](around:${radius},${lat},${lon});
-            );
-            out center;
-        `
-    };
-
-    const url = "https://overpass-api.de/api/interpreter";
-
-    const res = await fetch(url, {
-        method: "POST",
-        body: queries[type]
-    });
-
-    if (!res.ok) throw new Error("Erro Overpass");
-
-    const data = await res.json();
-    return data.elements;
+async function searchOsm(lat, lon, query) {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=20`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Falha na busca OSM");
+    return await res.json();
 }
 
 function processOsmResults(results, userLat, userLon) {
     return results
         .map(r => {
-            // Para 'way' (polígono), usar o centro calculado
-            const lat = r.center ? r.center.lat : r.lat;
-            const lon = r.center ? r.center.lon : r.lon;
-            
-            if (!lat || !lon) return null;
-
-            const dist = calculateDistance(userLat, userLon, lat, lon);
-
+            const dist = calculateDistance(userLat, userLon, parseFloat(r.lat), parseFloat(r.lon));
             return {
-                name: r.tags?.name || r.tags?.["addr:street"] || "Serviço automotivo",
-                address: [
-                    r.tags?.["addr:street"],
-                    r.tags?.["addr:housenumber"],
-                    r.tags?.["addr:city"]
-                ].filter(Boolean).join(", ") || "Endereço não informado",
-                lat,
-                lon,
+                name: r.display_name.split(',')[0],
+                address: r.address ? (r.address.road || r.display_name.split(',').slice(1,3).join(',')) : r.display_name,
+                lat: r.lat,
+                lon: r.lon,
                 distance: dist,
-                phone: r.tags?.phone || r.tags?.["contact:phone"] || r.tags?.mobile || ''
+                phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
             };
         })
-        .filter(item => item !== null)
+        .filter(r => r.distance <= 5)
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 10);
+        .slice(0, 3);
 }
 
 function openRoute(destLat, destLon) {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLon}&travelmode=driving`;
-    window.open(url, '_blank');
+    if (state.userCoords) {
+        const url = `https://www.google.com/maps/dir/?api=1&origin=${state.userCoords.lat},${state.userCoords.lon}&destination=${destLat},${destLon}&travelmode=driving`;
+        window.open(url, '_blank');
+    } else {
+        window.open(`https://www.google.com/maps?q=${destLat},${destLon}`, '_blank');
+    }
 }
 
 
