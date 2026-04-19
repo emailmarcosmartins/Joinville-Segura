@@ -354,10 +354,11 @@ async function fetchVeicularServices() {
         state.userCoords = { lat, lon };
 
         try {
+            // Busca expandida com termos em português e inglês para o OSM
             const [guincho, mecanico, borracharia] = await Promise.all([
-                searchOsm(lat, lon, 'guincho'),
-                searchOsm(lat, lon, 'mecanica'),
-                searchOsm(lat, lon, 'borracharia')
+                searchOsm(lat, lon, 'guincho towing auto_rescue'),
+                searchOsm(lat, lon, 'oficina mecanica car_repair'),
+                searchOsm(lat, lon, 'borracharia tyres repair')
             ]);
 
             state.veicularResults = {
@@ -370,7 +371,7 @@ async function fetchVeicularServices() {
             render();
         } catch (e) {
             console.error(e);
-            alert("Erro ao buscar serviços veiculares próximos.");
+            alert("Erro ao buscar serviços veiculares.");
             state.veicularLoading = false;
             setScreen('home');
         }
@@ -404,7 +405,7 @@ function processOsmResults(results, userLat, userLon) {
         .map(r => {
             const dist = calculateDistance(userLat, userLon, parseFloat(r.lat), parseFloat(r.lon));
             return {
-                name: r.display_name.split(',')[0],
+                name: r.display_name.split(','),
                 address: r.address ? (r.address.road || r.display_name.split(',').slice(1,3).join(',')) : r.display_name,
                 lat: r.lat,
                 lon: r.lon,
@@ -412,18 +413,15 @@ function processOsmResults(results, userLat, userLon) {
                 phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
             };
         })
-        .filter(r => r.distance <= 5)
+        // Opcional: Aumentar para 20km ou remover o filtro para ver tudo em Joinville
+        .filter(r => r.distance <= 20) 
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 3);
+        .slice(0, 5); // Retorna os 5 mais próximos
 }
 
 function openRoute(destLat, destLon) {
-    if (state.userCoords) {
-        const url = `https://www.google.com/maps/dir/?api=1&origin=${state.userCoords.lat},${state.userCoords.lon}&destination=${destLat},${destLon}&travelmode=driving`;
-        window.open(url, '_blank');
-    } else {
-        window.open(`https://www.google.com/maps?q=${destLat},${destLon}`, '_blank');
-    }
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLon}&travelmode=driving`;
+    window.open(url, '_blank');
 }
 
 
