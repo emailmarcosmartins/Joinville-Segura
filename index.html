@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0002"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0003"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -354,11 +354,11 @@ async function fetchVeicularServices() {
         state.userCoords = { lat, lon };
 
         try {
-            // Busca expandida com termos em português e inglês para o OSM
+            // Busca expandida com termos técnicos para maior precisão em Joinville
             const [guincho, mecanico, borracharia] = await Promise.all([
-                searchOsm(lat, lon, 'guincho towing auto_rescue'),
-                searchOsm(lat, lon, 'oficina mecanica car_repair'),
-                searchOsm(lat, lon, 'borracharia tyres repair')
+                searchOsm(lat, lon, 'guincho "auto rescue" towing'),
+                searchOsm(lat, lon, 'oficina mecanica "car repair"'),
+                searchOsm(lat, lon, 'borracharia "tyres repair" tyre')
             ]);
 
             state.veicularResults = {
@@ -371,7 +371,7 @@ async function fetchVeicularServices() {
             render();
         } catch (e) {
             console.error(e);
-            alert("Erro ao buscar serviços veiculares.");
+            alert("Erro ao buscar serviços veiculares próximos.");
             state.veicularLoading = false;
             setScreen('home');
         }
@@ -394,7 +394,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 async function searchOsm(lat, lon, query) {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=20`;
+    // Adicionado o parâmetro de visualização limitada à região para aumentar a precisão
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1&limit=30`;
     const res = await fetch(url);
     if (!res.ok) throw new Error("Falha na busca OSM");
     return await res.json();
@@ -413,10 +414,10 @@ function processOsmResults(results, userLat, userLon) {
                 phone: r.extratags?.phone || r.extratags?.['contact:phone'] || r.extratags?.mobile || ''
             };
         })
-        // Opcional: Aumentar para 20km ou remover o filtro para ver tudo em Joinville
-        .filter(r => r.distance <= 20) 
+        // Aumentado o raio de 5km para 20km para abranger Joinville
+        .filter(r => r.distance <= 20)
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 5); // Retorna os 5 mais próximos
+        .slice(0, 10); // Exibe até os 10 mais próximos
 }
 
 function openRoute(destLat, destLon) {
