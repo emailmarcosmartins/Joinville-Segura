@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260419_0005"; // Timestamp da Versão
+            const APP_VERSION = "20260419_0006"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -421,30 +421,42 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 async function searchOsm(lat, lon, type) {
-
+    const radius = 5000; // 5km de raio
+    
     const queries = {
         guincho: `
             [out:json][timeout:25];
             (
-              node["amenity"="car_repair"](around:8000,${lat},${lon});
-              node["shop"="car_repair"](around:8000,${lat},${lon});
-              node["shop"="tyres"](around:8000,${lat},${lon});
+              node["shop"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
+              node["amenity"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
+              node["shop"="towing"](around:${radius},${lat},${lon});
+              node["amenity"="towing"](around:${radius},${lat},${lon});
+              way["shop"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
+              way["amenity"="car_repair"]["service:vehicle:towing"="yes"](around:${radius},${lat},${lon});
             );
-            out;
+            out center;
         `,
         mecanico: `
             [out:json][timeout:25];
             (
-              node["shop"="car_repair"](around:8000,${lat},${lon});
+              node["shop"="car_repair"](around:${radius},${lat},${lon});
+              node["amenity"="car_repair"](around:${radius},${lat},${lon});
+              node["craft"="car_repair"](around:${radius},${lat},${lon});
+              way["shop"="car_repair"](around:${radius},${lat},${lon});
+              way["amenity"="car_repair"](around:${radius},${lat},${lon});
             );
-            out;
+            out center;
         `,
         borracharia: `
             [out:json][timeout:25];
             (
-              node["shop"="tyres"](around:8000,${lat},${lon});
+              node["shop"="tyres"](around:${radius},${lat},${lon});
+              node["shop"="tire"](around:${radius},${lat},${lon});
+              node["shop"="car_repair"]["service:tyres"="yes"](around:${radius},${lat},${lon});
+              way["shop"="tyres"](around:${radius},${lat},${lon});
+              way["shop"="tire"](around:${radius},${lat},${lon});
             );
-            out;
+            out center;
         `
     };
 
@@ -464,20 +476,28 @@ async function searchOsm(lat, lon, type) {
 function processOsmResults(results, userLat, userLon) {
     return results
         .map(r => {
-            const lat = r.lat;
-            const lon = r.lon;
+            // Para 'way' (polígono), usar o centro calculado
+            const lat = r.center ? r.center.lat : r.lat;
+            const lon = r.center ? r.center.lon : r.lon;
+            
+            if (!lat || !lon) return null;
 
             const dist = calculateDistance(userLat, userLon, lat, lon);
 
             return {
-                name: r.tags?.name || "Serviço automotivo",
-                address: r.tags?.["addr:street"] || "Endereço não informado",
+                name: r.tags?.name || r.tags?.["addr:street"] || "Serviço automotivo",
+                address: [
+                    r.tags?.["addr:street"],
+                    r.tags?.["addr:housenumber"],
+                    r.tags?.["addr:city"]
+                ].filter(Boolean).join(", ") || "Endereço não informado",
                 lat,
                 lon,
                 distance: dist,
-                phone: r.tags?.phone || r.tags?.["contact:phone"] || ''
+                phone: r.tags?.phone || r.tags?.["contact:phone"] || r.tags?.mobile || ''
             };
         })
+        .filter(item => item !== null)
         .sort((a, b) => a.distance - b.distance)
         .slice(0, 10);
 }
