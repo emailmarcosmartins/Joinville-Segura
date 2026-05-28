@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260527_0001"; // Timestamp da Versão
+            const APP_VERSION = "20260527_0002"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -384,7 +384,7 @@ function findVeicularService(type) {
 }
 
 function shareJoinvilleSegura() {
-    const shareUrl = "https://consegs.github.io/Joinville-Segura/";
+    const shareUrl = "👮 Acesse e compartilhe o JOINVILLE SEGURA: https://consegs.github.io/Joinville-Segura/";
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareUrl)}`;
     window.open(whatsappUrl, '_blank');
 }
