@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260528_0002"; // Timestamp da Versão
+            const APP_VERSION = "20260530_0001"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -1108,17 +1108,14 @@ function abrirBombeiros() {
 
                         <!-- QR Code Image -->
                         <div class="mt-6 flex flex-col items-center">
-                            <a href="https://consegs.github.io/Joinville-Segura/" target="_blank" class="w-full max-w-sm flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-md transition-all hover:scale-[1.03] duration-300 block hover:no-underline">
-                                <img src="https://consegs.github.io/Joinville-Segura/QR-CODE%20JOINVILLE%20SEGURA.png" 
+                            <a href="https://consegs.github.io/Joinville-Segura/" target="_blank" class="w-full max-w-md flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-md transition-all hover:scale-[1.03] duration-300 block hover:no-underline">
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=https%3A%2F%2Fconsegs.github.io%2FJoinville-Segura%2F" 
                                      alt="QR Code Joinville Segura" 
-                                     class="w-64 h-64 object-contain rounded-2xl cursor-pointer" 
+                                     class="w-80 h-80 md:w-96 md:h-96 object-contain rounded-2xl cursor-pointer bg-white p-3 shadow-inner" 
                                      id="about-qrcode" 
-                                     onerror="if(this.src.indexOf('.png') !== -1 && this.src.indexOf('consegs.github.io') !== -1) { this.src='https://consegs.github.io/Joinville-Segura/QR-CODE%20JOINVILLE%20SEGURA.jpg'; } else if(this.src.indexOf('consegs.github.io') !== -1) { this.src='https://raw.githubusercontent.com/consegs/Joinville-Segura/main/QR-CODE%20JOINVILLE%20SEGURA.jpg'; } else if(this.src.indexOf('.jpg') !== -1) { this.src='https://raw.githubusercontent.com/consegs/Joinville-Segura/main/QR-CODE%20JOINVILLE%20SEGURA.png'; } else { this.onerror=null; }">
-                                <p class="text-sm text-blue-600 dark:text-blue-400 mt-4 font-extrabold text-center uppercase tracking-wider hover:underline flex items-center gap-1 leading-tight">
-                                    🔗 CLIQUE AQUI PARA ABRI-LA NO SEU NAVEGADOR
-                                </p>
-                                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-2 font-semibold text-center uppercase tracking-wider">
-                                    Ou aponte a câmera do seu celular para este QR Code
+                                     onerror="this.src='https://chart.googleapis.com/chart?chs=600x600&cht=qr&chl=https%3A%2F%2Fconsegs.github.io%2FJoinville-Segura%2F&choe=UTF-8';">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-4 font-bold text-center uppercase tracking-wider leading-tight">
+                                    Aponte a câmera de outro celular para este QR Code para compartilhar o aplicativo
                                 </p>
                             </a>
                         </div>
