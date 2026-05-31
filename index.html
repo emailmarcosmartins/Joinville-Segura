@@ -7,7 +7,7 @@
     <script>
         // Lógica para forçar recarregamento no Celular se houver nova versão
         (function() {
-            const APP_VERSION = "20260531_0001"; // Timestamp da Versão
+            const APP_VERSION = "20260531_0002"; // Timestamp da Versão
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (isMobile) {
@@ -408,7 +408,12 @@ function shareHelpLocation() {
             currentAddress = addressTextEl.innerText.trim();
         }
     }
-    const message = "Preciso de ajuda: estou na rua " + (currentAddress || "");
+    let message = "Preciso de ajuda: estou na rua " + (currentAddress || "");
+    if (currentLat !== null && currentLng !== null) {
+        message += " - esta é minha localização: https://www.google.com/maps?q=" + currentLat + "," + currentLng;
+    } else {
+        message += " - esta é minha localização: https://www.google.com/maps?q=" + encodeURIComponent(currentAddress || "");
+    }
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
 }
 
